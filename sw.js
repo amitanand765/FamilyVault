@@ -1,4 +1,4 @@
-const CACHE_NAME = "familyvault-v9";
+const CACHE_NAME = "familyvault-v11";
 const ASSETS = [
   "./index.html",
   "./manifest.json"

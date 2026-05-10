@@ -1007,7 +1007,14 @@ function togglePass(id){showPass[id]=!showPass[id];renderCredList();}
 function renderDashboard() {
   // Filter investments based on view mode
   var filtered = viewMode === "all" ? investments :
-    investments.filter(function(i){ return i.addedByUid === viewMode; });
+    investments.filter(function(i){
+      if(i.addedByUid) return i.addedByUid === viewMode;
+      // Old data — match by name string against member names
+      var member = membersCache.find(function(m){ return m.uid === viewMode; });
+      if(!member) return false;
+      var memberName = member.name || member.email.split("@")[0];
+      return i.addedBy === memberName;
+    });
 
   // Show view mode label
   var modeLabel = "";
@@ -1134,7 +1141,13 @@ function renderPie(total, invList) {
 function toggleCat(catName) {
   expandedCats[catName] = !expandedCats[catName];
   var filtered = viewMode === "all" ? investments :
-    investments.filter(function(i){ return i.addedByUid === viewMode; });
+    investments.filter(function(i){
+      if(i.addedByUid) return i.addedByUid === viewMode;
+      var member = membersCache.find(function(m){ return m.uid === viewMode; });
+      if(!member) return false;
+      var memberName = member.name || member.email.split("@")[0];
+      return i.addedBy === memberName;
+    });
   renderCats(filtered);
 }
 
