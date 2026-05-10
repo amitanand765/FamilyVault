@@ -1122,7 +1122,7 @@ function renderChart(invList) {
     var chgCol=chg>0?"var(--green)":chg<0?"var(--red)":"var(--muted)";
     var L=lbl(k);
     return '<div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex-shrink:0;width:'+(barW+8)+'px">'+
-      '<div style="font-size:9px;color:'+(i===keys.length-1?var(--accent2):var(--accent))+';font-weight:700;text-align:center;min-height:14px">'+short(cumulative[i])+'</div>'+
+      '<div style="font-size:9px;color:'+(i===keys.length-1?"#085A67":"#0A6B7A")+';font-weight:700;text-align:center;min-height:14px">'+short(cumulative[i])+'</div>'+
       '<div style="font-size:9px;color:'+chgCol+';font-weight:700;text-align:center;min-height:12px">'+chgStr+'</div>'+
       '<div style="width:'+barW+'px;height:'+chartH+'px;display:flex;align-items:flex-end">'+
         '<div style="width:100%;height:'+h+'px;background:'+(hasNew?"linear-gradient(180deg,#0D8FA0,#0A6B7A)":"linear-gradient(180deg,#C8C0B0,#DDD8CC)")+';border-radius:5px 5px 0 0"></div>'+
@@ -1425,12 +1425,10 @@ function renderCredList() {
 }
 
 // ── SERVICE WORKER ─────────────────────────────────────────
-// Unregister all old service workers first, then register fresh
+// Unregister all service workers to fix caching issues
 if("serviceWorker" in navigator) {
   navigator.serviceWorker.getRegistrations().then(function(regs) {
     regs.forEach(function(reg) { reg.unregister(); });
-  }).then(function() {
-    navigator.serviceWorker.register("./sw.js").catch(function(){});
   });
 }
 </script>
