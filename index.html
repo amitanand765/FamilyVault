@@ -173,7 +173,8 @@
 <div id="screen-loading" class="screen active center-screen" style="background:#F5F2EB">
   <div style="font-size:48px;margin-bottom:16px">⏳</div>
   <div style="font-family:'Playfair Display',serif;font-size:22px;font-weight:900;color:#1A1410;margin-bottom:8px">Family Vault</div>
-  <div style="font-size:14px;color:#6B7280">Loading...</div>
+  <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#7A7268" id="loading-msg">Initialising...</div>
+  <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:#aaa;margin-top:8px" id="loading-step"></div>
 </div>
 
 <!-- ── LOGIN SCREEN ── -->
@@ -447,7 +448,14 @@
 </div>
 
 <script>
+function dbg(msg) {
+  var el = document.getElementById("loading-step");
+  if(el) el.textContent = msg;
+  console.log("[FV]", msg);
+}
+
 // ── FIREBASE ───────────────────────────────────────────────
+dbg("Step 1: Firebase init...");
 firebase.initializeApp({
   apiKey:"AIzaSyBsuDfa4pYr_LMtp0Wqs9Ebl6BBSkQ5N00",
   authDomain:"familyvault-14f0c.firebaseapp.com",
@@ -456,6 +464,7 @@ firebase.initializeApp({
   messagingSenderId:"926011393254",
   appId:"1:926011393254:web:b825b3581791a7ae276727"
 });
+dbg("Step 2: Auth + Firestore...");
 var auth = firebase.auth();
 var db   = firebase.firestore();
 
@@ -564,15 +573,17 @@ function logout() {
 }
 
 // ── AUTH STATE ─────────────────────────────────────────────
-// Safety timeout — if Firebase doesn't respond in 8 seconds, show login
+dbg("Step 3: Waiting for auth...");
 var authTimeout = setTimeout(function() {
   if(document.getElementById("screen-loading").classList.contains("active")) {
+    dbg("Timeout — showing login");
     showScreen("screen-login");
   }
 }, 8000);
 
 auth.onAuthStateChanged(function(u) {
   clearTimeout(authTimeout);
+  dbg("Step 4: Auth state received — "+(u?"logged in":"not logged in"));
   currentUser = u;
   if(u) {
     document.getElementById("user-greeting").textContent = "Welcome, "+(u.displayName||u.email.split("@")[0]);
@@ -1414,7 +1425,14 @@ function renderCredList() {
 }
 
 // ── SERVICE WORKER ─────────────────────────────────────────
-if("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(function(){});
+// Unregister all old service workers first, then register fresh
+if("serviceWorker" in navigator) {
+  navigator.serviceWorker.getRegistrations().then(function(regs) {
+    regs.forEach(function(reg) { reg.unregister(); });
+  }).then(function() {
+    navigator.serviceWorker.register("./sw.js").catch(function(){});
+  });
+}
 </script>
 </body>
 </html>
