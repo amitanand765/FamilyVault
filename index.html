@@ -359,7 +359,20 @@
     <!-- Basic Details -->
     <div class="field"><label>Name</label><input id="f-name" type="text" placeholder="e.g. SBI Bluechip Fund"/></div>
     <div class="field"><label>Category</label>
-      <select id="f-cat"><option>Mutual Fund</option><option>Gold</option><option>Silver</option><option>Fixed Deposit</option><option>Recurring Deposit</option><option>Stocks</option><option>Real Estate</option><option>Other</option></select>
+      <select id="f-cat" onchange="handleCatChange(this)">
+        <option>Mutual Fund</option>
+        <option>Gold</option>
+        <option>Silver</option>
+        <option>Fixed Deposit</option>
+        <option>Recurring Deposit</option>
+        <option>Stocks</option>
+        <option>Real Estate</option>
+        <option>Savings Account</option>
+        <option>Crypto</option>
+        <option>Other</option>
+        <option value="__custom__">+ Add Custom Category</option>
+      </select>
+      <input id="f-cat-custom" type="text" placeholder="Enter custom category name" style="display:none;width:100%;background:var(--bg);border:1.5px solid var(--accent);border-radius:10px;padding:12px 14px;color:var(--text);font-size:15px;font-family:inherit;outline:none;margin-top:8px"/>
     </div>
     <div class="field"><label>Current Value (₹)</label><input id="f-cur" type="number" placeholder="e.g. 62000"/></div>
     <div class="field"><label>Withdrawable?</label>
@@ -767,7 +780,16 @@ function fdelInv(id)    { return db.collection("families").doc(familyCode).colle
 function fdelCred(id)   { return db.collection("families").doc(familyCode).collection("credentials").doc(id).delete(); }
 
 // ── HELPERS ────────────────────────────────────────────────
-var CAT_COLORS = {"Mutual Fund":"#6C63FF","Gold":"#F5A623","Silver":"#A8B2C1","Fixed Deposit":"#2ECC71","Recurring Deposit":"#1ABC9C","Stocks":"#E74C3C","Real Estate":"#E67E22","Other":"#95A5A6"};
+var CAT_COLORS = {"Mutual Fund":"#6C63FF","Gold":"#F5A623","Silver":"#A8B2C1","Fixed Deposit":"#2ECC71","Recurring Deposit":"#1ABC9C","Stocks":"#E74C3C","Real Estate":"#E67E22","Savings Account":"#3498DB","Crypto":"#F39C12","Other":"#95A5A6"};
+function getCatColor(cat) {
+  if(CAT_COLORS[cat]) return CAT_COLORS[cat];
+  // Generate consistent color for custom categories
+  var hash = 0;
+  for(var i=0;i<cat.length;i++) hash = cat.charCodeAt(i) + ((hash<<5)-hash);
+  var h = Math.abs(hash) % 360;
+  return 'hsl('+h+',60%,55%)';
+}
+
 function inr(v){return new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:0}).format(v||0);}
 function pct(v){return(v>=0?"+":"")+v.toFixed(2)+"%";}
 function genId(){return Date.now().toString(36)+Math.random().toString(36).slice(2);}
@@ -789,11 +811,42 @@ function closeModal(id) {document.getElementById(id).classList.remove("open");}
 // ── INVESTMENT CRUD ────────────────────────────────────────
 var currentHistory = []; // holds history entries while modal is open
 
+function handleCatChange(sel) {
+  var custom = document.getElementById("f-cat-custom");
+  if(sel.value === "__custom__") {
+    custom.style.display = "block";
+    custom.focus();
+  } else {
+    custom.style.display = "none";
+    custom.value = "";
+  }
+}
+
+function getSelectedCategory() {
+  var sel = document.getElementById("f-cat");
+  if(sel.value === "__custom__") {
+    var custom = document.getElementById("f-cat-custom").value.trim();
+    return custom || "Other";
+  }
+  return sel.value;
+}
+
 function openInvModal(inv) {
   editInvId = inv ? inv.id : null;
   document.getElementById("inv-title").textContent = inv ? "Edit Investment" : "Add Investment";
   document.getElementById("f-name").value  = inv ? inv.name : "";
-  document.getElementById("f-cat").value   = inv ? inv.category : "Mutual Fund";
+  // Handle category — if it's a custom one not in the list, show custom input
+  var knownCats = ["Mutual Fund","Gold","Silver","Fixed Deposit","Recurring Deposit","Stocks","Real Estate","Savings Account","Crypto","Other"];
+  var cat = inv ? inv.category : "Mutual Fund";
+  if(inv && knownCats.indexOf(cat) === -1) {
+    document.getElementById("f-cat").value = "__custom__";
+    document.getElementById("f-cat-custom").style.display = "block";
+    document.getElementById("f-cat-custom").value = cat;
+  } else {
+    document.getElementById("f-cat").value = cat;
+    document.getElementById("f-cat-custom").style.display = "none";
+    document.getElementById("f-cat-custom").value = "";
+  }
   document.getElementById("f-cur").value   = inv ? inv.currentValue : "";
   document.getElementById("f-with").value  = inv ? inv.withdrawable : "yes";
   document.getElementById("f-notes").value = inv ? (inv.notes||"") : "";
@@ -871,10 +924,12 @@ function saveInv() {
   if(!cur)            { alert("Please enter current value"); return; }
   if(!currentHistory.length) { alert("Please add at least one investment entry"); return; }
   var totalInvested = currentHistory.reduce(function(s,h){ return s+h.amount; }, 0);
+  var cat = getSelectedCategory();
+  if(!cat) { alert("Please enter a category name"); return; }
   var obj = {
     id:             editInvId || genId(),
     name:           name,
-    category:       document.getElementById("f-cat").value,
+    category:       cat,
     currentValue:   parseFloat(cur),
     investedAmount: totalInvested,
     withdrawable:   document.getElementById("f-with").value,
@@ -1000,7 +1055,15 @@ function renderPie(total) {
   svg.innerHTML="";leg.innerHTML="";
   var cx=110,cy=110,r=80,inner=48;
   if(!total){svg.innerHTML='<circle cx="110" cy="110" r="80" fill="#161b27" stroke="#2a3040" stroke-width="2"/><text x="110" y="115" text-anchor="middle" fill="#556" font-size="13" font-family="DM Sans,sans-serif">No data</text>';return;}
-  var cats=Object.keys(CAT_COLORS).map(function(c){return{name:c,color:CAT_COLORS[c],value:investments.filter(function(i){return i.category===c;}).reduce(function(s,i){return s+i.currentValue;},0)};}).filter(function(d){return d.value>0;});
+  // Build dynamic category list from actual investments
+  var catMap = {};
+  investments.forEach(function(i){
+    if(!catMap[i.category]) catMap[i.category] = 0;
+    catMap[i.category] += i.currentValue;
+  });
+  var cats = Object.keys(catMap).filter(function(c){ return catMap[c]>0; }).map(function(c){
+    return {name:c, color:getCatColor(c), value:catMap[c]};
+  });
   var angle=-Math.PI/2;
   cats.forEach(function(d){
     var sweep=(d.value/total)*2*Math.PI;
@@ -1028,7 +1091,14 @@ function renderPie(total) {
 // ── CATEGORY LIST ──────────────────────────────────────────
 function renderCats() {
   var el=document.getElementById("cat-list");
-  var cats=Object.keys(CAT_COLORS).map(function(c){return{name:c,color:CAT_COLORS[c],items:investments.filter(function(i){return i.category===c;})};}).filter(function(d){return d.items.length>0;});
+  var catMap = {};
+  investments.forEach(function(i){
+    if(!catMap[i.category]) catMap[i.category] = [];
+    catMap[i.category].push(i);
+  });
+  var cats = Object.keys(catMap).map(function(c){
+    return {name:c, color:getCatColor(c), items:catMap[c]};
+  });
   if(!cats.length){el.innerHTML='<div class="empty"><div class="empty-icon">📊</div><p>No investments yet</p></div>';return;}
   el.innerHTML=cats.map(function(d){
     var cur=d.items.reduce(function(s,i){return s+i.currentValue;},0);
@@ -1046,7 +1116,7 @@ function renderInvList() {
   if(!investments.length){el.innerHTML='<div class="empty"><div class="empty-icon">📊</div><p>No investments yet. Tap above to add.</p></div>';return;}
   el.innerHTML=investments.map(function(inv){
     var gain=inv.currentValue-inv.investedAmount,p=inv.investedAmount>0?(gain/inv.investedAmount*100):0;
-    var gc=gain>=0?"var(--green)":"var(--red)",col=CAT_COLORS[inv.category]||"#6C63FF";
+    var gc=gain>=0?"var(--green)":"var(--red)",col=getCatColor(inv.category);
     var wTag=inv.withdrawable==="yes"?'<span class="tag" style="background:#2ECC7122;color:var(--green)">Withdrawable</span>':'<span class="tag" style="background:#E74C3C22;color:var(--red)">Locked</span>';
     var addedBy=inv.addedBy?'<span style="font-size:11px;color:var(--muted);margin-left:auto">by '+inv.addedBy+'</span>':"";
     return '<div class="inv-card" style="border-color:'+col+'33">'+
