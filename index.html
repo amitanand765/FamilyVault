@@ -302,7 +302,7 @@
             <div id="pie-pct" style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:var(--accent);margin-top:3px">100%</div>
           </div>
         </div>
-        <div id="pie-legend" style="margin-top:14px;display:flex;flex-wrap:wrap;gap:6px;justify-content:center"></div>
+        <div id="pie-legend" style="margin-top:16px;display:flex;flex-direction:column"></div>
       </div>
       <div class="card">
         <div class="sec-lbl">By Category</div>
@@ -1170,10 +1170,7 @@ function selectPieSlice(cats, total, i) {
       dd._p.style.transform="";
     }
     if(dd._leg){
-      dd._leg.style.opacity      = j===i ? "1" : "0.4";
-      dd._leg.style.borderColor  = j===i ? dd.color : "var(--border)";
-      dd._leg.style.background   = j===i ? dd.color+"22" : "transparent";
-      dd._leg.style.transform    = "";
+      dd._leg.style.opacity = j===i ? "1" : "0.35";
     }
   });
   var icon=document.getElementById("pie-icon");
@@ -1195,8 +1192,7 @@ function deselectPie(cats, total) {
   cats.forEach(function(d){
     d._p.style.opacity="1"; d._p.style.filter=""; d._p.style.transform="";
     if(d._leg){
-      d._leg.style.opacity="1"; d._leg.style.borderColor="var(--border)";
-      d._leg.style.background="transparent"; d._leg.style.transform="";
+      d._leg.style.opacity="1";
     }
   });
   document.getElementById("pie-icon").textContent="💼";
@@ -1274,12 +1270,14 @@ function renderPie(total, invList) {
     svg.appendChild(ov);
     d._p=p; d._mid=mid; angle=end;
 
-    // Legend item - compact
+    // Legend item - compact pill
     var item=document.createElement("div");
-    item.style.cssText="display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:8px;cursor:pointer;border:1px solid var(--border);transition:all .2s;animation:fadeSlide .4s "+(i*0.07+0.35)+"s both;flex-shrink:0";
-    item.innerHTML='<span style="width:8px;height:8px;border-radius:2px;background:'+d.color+';flex-shrink:0"></span>'+
-      '<span style="font-size:12px;font-weight:600;color:#C8D0E0;white-space:nowrap">'+d.name+'</span>'+
-      '<span style="font-size:11px;font-weight:700;color:#fff;margin-left:2px">'+((d.value/total)*100).toFixed(0)+'%</span>';
+    item.style.cssText="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;transition:opacity .2s";
+    item.innerHTML=
+      '<span style="width:10px;height:10px;border-radius:2px;background:'+d.color+';flex-shrink:0"></span>'+
+      '<span style="font-family:\'IBM Plex Sans\',sans-serif;font-size:13px;font-weight:500;color:var(--text);flex:1">'+d.name+'</span>'+
+      '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:700;color:'+d.color+'">'+((d.value/total)*100).toFixed(1)+'%</span>'+
+      '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;color:var(--muted);min-width:52px;text-align:right">'+inr(d.value)+'</span>';
     (function(idx){ item.addEventListener("click",function(){ selectPieSlice(cats,total,idx); }); })(i);
     legEl.appendChild(item);
     d._leg=item;
