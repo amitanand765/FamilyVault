@@ -1,4 +1,4 @@
-const CACHE_NAME = "familyvault-v14";
+const CACHE_NAME = "familyvault-v15";
 const ASSETS = [
   "./index.html",
   "./manifest.json"
@@ -20,8 +20,15 @@ self.addEventListener("activate", e => {
   self.clients.claim();
 });
 
+// Network first — always get fresh version, fall back to cache only if offline
 self.addEventListener("fetch", e => {
   e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request).catch(() => caches.match("./index.html")))
+    fetch(e.request)
+      .then(response => {
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(e.request, copy));
+        return response;
+      })
+      .catch(() => caches.match(e.request))
   );
 });
