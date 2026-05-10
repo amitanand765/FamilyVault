@@ -564,7 +564,15 @@ function logout() {
 }
 
 // ── AUTH STATE ─────────────────────────────────────────────
+// Safety timeout — if Firebase doesn't respond in 8 seconds, show login
+var authTimeout = setTimeout(function() {
+  if(document.getElementById("screen-loading").classList.contains("active")) {
+    showScreen("screen-login");
+  }
+}, 8000);
+
 auth.onAuthStateChanged(function(u) {
+  clearTimeout(authTimeout);
   currentUser = u;
   if(u) {
     document.getElementById("user-greeting").textContent = "Welcome, "+(u.displayName||u.email.split("@")[0]);
