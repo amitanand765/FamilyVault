@@ -268,7 +268,7 @@
 
       <div id="invite-banner" style="display:none" class="invite-banner">
         <div>
-          <div style="font-size:12px;color:#8899aa;margin-bottom:4px">👥 Invite your family</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:4px">👥 Invite your family</div>
           <div class="invite-code" id="banner-code"></div>
         </div>
         <button class="bsm" onclick="shareCode()">Share</button>
@@ -295,11 +295,11 @@
         <div class="sec-lbl">Portfolio Breakdown</div>
         <div style="position:relative;width:260px;height:260px;margin:0 auto">
           <svg id="pie-svg" viewBox="0 0 260 260" width="260" height="260" style="overflow:visible"></svg>
-          <div id="pie-center" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:100px;height:100px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;pointer-events:none">
+          <div id="pie-center" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:110px;height:110px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;pointer-events:none">
             <div id="pie-icon" style="font-size:20px;margin-bottom:4px;transition:transform .35s cubic-bezier(.34,1.56,.64,1)">💼</div>
-            <div id="pie-cat" style="font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:2px;transition:color .3s">Portfolio</div>
-            <div id="pie-amt" style="font-family:'Playfair Display',serif;font-size:16px;font-weight:700;color:#fff;line-height:1">₹0</div>
-            <div id="pie-pct" style="font-size:11px;font-weight:700;color:var(--accent);margin-top:2px">100%</div>
+            <div id="pie-cat" style="font-family:'IBM Plex Mono',monospace;font-size:8px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:2px;transition:color .3s">Portfolio</div>
+            <div id="pie-amt" style="font-family:'Playfair Display',serif;font-size:16px;font-weight:700;color:var(--text);line-height:1">₹0</div>
+            <div id="pie-pct" style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:var(--accent);margin-top:3px">100%</div>
           </div>
         </div>
         <div id="pie-legend" style="margin-top:14px;display:flex;flex-wrap:wrap;gap:6px;justify-content:center"></div>
@@ -527,9 +527,10 @@ function toggleAuthPass() {
   }
 }
 
-var expandedCats = {};  // tracks which categories are expanded
-var viewMode     = "all"; // "all" or a member uid
-var membersCache = [];    // cached members list for toggle buttons
+var expandedCats = {};
+var viewMode     = "all";
+var membersCache = [];
+var authMode     = "signin";
 function showAuthTab(mode) {
   authMode = mode;
   document.querySelectorAll(".auth-tab").forEach(function(b,i){
@@ -1119,21 +1120,27 @@ function renderChart(invList) {
     var prev=i>0?cumulative[i-1]:0;
     var chg=prev>0?((cumulative[i]-prev)/prev*100):0;
     var chgStr=i===0?"":(chg>0?"+"+chg.toFixed(1)+"%":chg.toFixed(1)+"%");
-    var chgCol=chg>0?"var(--green)":chg<0?"var(--red)":"var(--muted)";
+    var chgCol=chg>0?"#1A6B3C":chg<0?"#8B1A1A":"#7A7268";
     var L=lbl(k);
-    return '<div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex-shrink:0;width:'+(barW+8)+'px">'+
-      '<div style="font-size:9px;color:'+(i===keys.length-1?"#085A67":"#0A6B7A")+';font-weight:700;text-align:center;min-height:14px">'+short(cumulative[i])+'</div>'+
-      '<div style="font-size:9px;color:'+chgCol+';font-weight:700;text-align:center;min-height:12px">'+chgStr+'</div>'+
-      '<div style="width:'+barW+'px;height:'+chartH+'px;display:flex;align-items:flex-end">'+
-        '<div style="width:100%;height:'+h+'px;background:'+(hasNew?"linear-gradient(180deg,#0D8FA0,#0A6B7A)":"linear-gradient(180deg,#C8C0B0,#DDD8CC)")+';border-radius:5px 5px 0 0"></div>'+
+    return '<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex-shrink:0;width:'+(barW+8)+'px">'+
+      '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:8px;color:#0A6B7A;font-weight:600;text-align:center;min-height:13px">'+short(cumulative[i])+'</div>'+
+      '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:8px;color:'+chgCol+';font-weight:600;text-align:center;min-height:11px">'+chgStr+'</div>'+
+      '<div style="width:'+(barW-2)+'px;height:'+chartH+'px;display:flex;align-items:flex-end">'+
+        '<div style="width:100%;height:'+h+'px;background:'+(hasNew?"#0A6B7A":"#C8C0B0")+';border-radius:2px 2px 0 0"></div>'+
       '</div>'+
-      '<div style="font-size:9px;color:'+(hasNew?"var(--text)":"var(--muted)")+';text-align:center;line-height:1.4;font-weight:'+(hasNew?600:400)+'">'+L[0]+'<br>'+L[1]+'</div>'+
+      '<div style="font-family:\'IBM Plex Mono\',monospace;font-size:8px;color:'+(hasNew?"#1A1410":"#7A7268")+';text-align:center;line-height:1.4;font-weight:'+(hasNew?600:400)+'">'+L[0]+'<br>'+L[1]+'</div>'+
     '</div>';
   }).join("");
-  el.innerHTML='<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><div style="display:flex;gap:4px;align-items:flex-end;padding:4px 2px;min-width:max-content">'+bars+'</div></div>'+
-    '<div style="display:flex;gap:16px;margin-top:12px;font-size:11px;color:var(--muted);flex-wrap:wrap">'+
-    '<span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:3px;background:linear-gradient(180deg,#0D8FA0,#0A6B7A);display:inline-block"></span>New investment</span>'+
-    '<span style="display:flex;align-items:center;gap:5px"><span style="width:10px;height:10px;border-radius:3px;background:linear-gradient(180deg,#C8C0B0,#DDD8CC);display:inline-block"></span>No change</span></div>';
+  el.innerHTML=
+    '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch">'+
+      '<div style="display:flex;gap:3px;align-items:flex-end;padding:4px 2px 0;min-width:max-content;'+
+           'border-left:2px solid #1A1410;border-bottom:2px solid #1A1410;padding-bottom:0">'+
+        bars+
+      '</div>'+
+    '</div>'+
+    '<div style="display:flex;gap:16px;margin-top:10px;font-family:\'IBM Plex Mono\',monospace;font-size:8px;color:#7A7268;flex-wrap:wrap">'+
+    '<span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:#0A6B7A;display:inline-block"></span>New investment</span>'+
+    '<span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:#C8C0B0;display:inline-block"></span>No change</span></div>';
 }
 
 // ── PIE CHART ──────────────────────────────────────────────
