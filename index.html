@@ -152,6 +152,8 @@
     .legend{display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:center;margin-top:14px}
     .legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);font-weight:500}
     .err-text{font-size:13px;color:var(--red);text-align:center;min-height:18px;margin-top:8px}
+    @keyframes sliceReveal{from{opacity:0;transform-origin:130px 130px;transform:scale(0.5)}to{opacity:1;transform:scale(1)}}
+    @keyframes fadeSlide{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
   </style>
 </head>
 <body>
@@ -279,10 +281,16 @@
       </div>
       <div class="card">
         <div class="sec-lbl">Portfolio Breakdown</div>
-        <div style="display:flex;flex-direction:column;align-items:center">
-          <svg id="pie-svg" width="220" height="220"></svg>
-          <div class="legend" id="pie-legend"></div>
+        <div style="position:relative;width:260px;height:260px;margin:0 auto">
+          <svg id="pie-svg" viewBox="0 0 260 260" width="260" height="260" style="overflow:visible"></svg>
+          <div id="pie-center" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:100px;height:100px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;pointer-events:none">
+            <div id="pie-icon" style="font-size:20px;margin-bottom:4px;transition:transform .35s cubic-bezier(.34,1.56,.64,1)">💼</div>
+            <div id="pie-cat" style="font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:2px;transition:color .3s">Portfolio</div>
+            <div id="pie-amt" style="font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:800;color:#fff;line-height:1">₹0</div>
+            <div id="pie-pct" style="font-size:11px;font-weight:700;color:var(--accent);margin-top:2px">100%</div>
+          </div>
         </div>
+        <div id="pie-legend" style="margin-top:16px;display:flex;flex-direction:column;gap:6px"></div>
       </div>
       <div class="card">
         <div class="sec-lbl">By Category</div>
@@ -1099,42 +1107,182 @@ function renderChart(invList) {
 }
 
 // ── PIE CHART ──────────────────────────────────────────────
+var pieActive = null;
+var pieCycleTimer = null;
+
+function pieXY(cx,cy,r,a){return{x:cx+r*Math.cos(a),y:cy+r*Math.sin(a)};}
+function pieArc(cx,cy,r,ir,sa,ea){
+  var gap=0.022;
+  var s1=pieXY(cx,cy,r,sa+gap/2),e1=pieXY(cx,cy,r,ea-gap/2);
+  var s2=pieXY(cx,cy,ir,ea-gap/2),e2=pieXY(cx,cy,ir,sa+gap/2);
+  var lg=(ea-sa-gap)>Math.PI?1:0;
+  return "M"+s1.x+","+s1.y+" A"+r+","+r+" 0 "+lg+" 1 "+e1.x+","+e1.y+" L"+s2.x+","+s2.y+" A"+ir+","+ir+" 0 "+lg+" 0 "+e2.x+","+e2.y+" Z";
+}
+
+function selectPieSlice(cats, total, i) {
+  if(pieActive===i){ deselectPie(cats, total); return; }
+  pieActive=i;
+  var d=cats[i];
+  cats.forEach(function(dd,j){
+    dd._p.style.opacity = j===i ? "1" : "0.3";
+    dd._p.style.filter  = j===i ? "url(#pgf"+j+")" : "none";
+    if(j===i){
+      var mx=Math.cos(dd._mid)*8, my=Math.sin(dd._mid)*8;
+      dd._p.style.transform="translate("+mx+"px,"+my+"px)";
+    } else {
+      dd._p.style.transform="";
+    }
+    if(dd._leg){
+      dd._leg.style.opacity      = j===i ? "1" : "0.4";
+      dd._leg.style.borderColor  = j===i ? dd.color : "var(--border)";
+      dd._leg.style.background   = j===i ? "#141C2C" : "transparent";
+      dd._leg.style.transform    = j===i ? "translateX(4px)" : "";
+    }
+  });
+  var icon=document.getElementById("pie-icon");
+  icon.style.transform="scale(0)";
+  setTimeout(function(){
+    icon.textContent=d.emoji||"💰";
+    icon.style.transform="scale(1.2)";
+    setTimeout(function(){icon.style.transform="";},200);
+  },100);
+  document.getElementById("pie-cat").textContent=d.name;
+  document.getElementById("pie-cat").style.color=d.color;
+  document.getElementById("pie-amt").textContent=inr(d.value);
+  document.getElementById("pie-pct").textContent=(d.value/total*100).toFixed(1)+"%";
+  document.getElementById("pie-pct").style.color=d.color;
+}
+
+function deselectPie(cats, total) {
+  pieActive=null;
+  cats.forEach(function(d){
+    d._p.style.opacity="1"; d._p.style.filter=""; d._p.style.transform="";
+    if(d._leg){
+      d._leg.style.opacity="1"; d._leg.style.borderColor="var(--border)";
+      d._leg.style.background="transparent"; d._leg.style.transform="";
+    }
+  });
+  document.getElementById("pie-icon").textContent="💼";
+  document.getElementById("pie-cat").textContent="Portfolio";
+  document.getElementById("pie-cat").style.color="var(--muted)";
+  document.getElementById("pie-amt").textContent=inr(total);
+  document.getElementById("pie-pct").textContent="100%";
+  document.getElementById("pie-pct").style.color="var(--accent)";
+}
+
 function renderPie(total, invList) {
   invList = invList || investments;
-  var svg=document.getElementById("pie-svg"),leg=document.getElementById("pie-legend");
-  svg.innerHTML="";leg.innerHTML="";
-  var cx=110,cy=110,r=80,inner=48;
-  if(!total){svg.innerHTML='<circle cx="110" cy="110" r="80" fill="#161b27" stroke="#2a3040" stroke-width="2"/><text x="110" y="115" text-anchor="middle" fill="#556" font-size="13" font-family="DM Sans,sans-serif">No data</text>';return;}
+  clearTimeout(pieCycleTimer);
+  pieActive = null;
+  var svg=document.getElementById("pie-svg");
+  var legEl=document.getElementById("pie-legend");
+  svg.innerHTML=""; legEl.innerHTML="";
+
+  var CX=130,CY=130,R=118,IR=72;
+
+  if(!total){
+    svg.innerHTML='<circle cx="130" cy="130" r="118" fill="#161b27" stroke="#2a3040" stroke-width="1.5"/><text x="130" y="135" text-anchor="middle" fill="#556" font-size="13" font-family="DM Sans,sans-serif">No data yet</text>';
+    document.getElementById("pie-amt").textContent="₹0";
+    return;
+  }
+
+  // Build category data
   var catMap={};
   invList.forEach(function(i){
     if(!catMap[i.category]) catMap[i.category]=0;
     catMap[i.category]+=i.currentValue;
   });
   var cats=Object.keys(catMap).filter(function(c){return catMap[c]>0;}).map(function(c){
-    return{name:c,color:getCatColor(c),value:catMap[c]};
+    return{name:c,color:getCatColor(c),value:catMap[c],emoji:getCatEmoji(c)};
   });
+
+  // Defs
+  var defs=document.createElementNS("http://www.w3.org/2000/svg","defs");
+  // Depth gradient
+  var rg=document.createElementNS("http://www.w3.org/2000/svg","radialGradient");
+  rg.setAttribute("id","pdepth"); rg.setAttribute("cx","35%"); rg.setAttribute("cy","30%"); rg.setAttribute("r","70%");
+  var rs1=document.createElementNS("http://www.w3.org/2000/svg","stop"); rs1.setAttribute("offset","0%"); rs1.setAttribute("stop-color","#fff"); rs1.setAttribute("stop-opacity","0.1");
+  var rs2=document.createElementNS("http://www.w3.org/2000/svg","stop"); rs2.setAttribute("offset","100%"); rs2.setAttribute("stop-color","#000"); rs2.setAttribute("stop-opacity","0.2");
+  rg.appendChild(rs1); rg.appendChild(rs2); defs.appendChild(rg);
+  // Glow filters
+  cats.forEach(function(d,i){
+    var f=document.createElementNS("http://www.w3.org/2000/svg","filter");
+    f.setAttribute("id","pgf"+i); f.setAttribute("x","-50%"); f.setAttribute("y","-50%"); f.setAttribute("width","200%"); f.setAttribute("height","200%");
+    var fe=document.createElementNS("http://www.w3.org/2000/svg","feDropShadow");
+    fe.setAttribute("dx","0"); fe.setAttribute("dy","0"); fe.setAttribute("stdDeviation","8");
+    fe.setAttribute("flood-color",d.color); fe.setAttribute("flood-opacity","0.9");
+    f.appendChild(fe); defs.appendChild(f);
+  });
+  svg.appendChild(defs);
+
+  // Draw slices
   var angle=-Math.PI/2;
-  cats.forEach(function(d){
+  cats.forEach(function(d,i){
     var sweep=(d.value/total)*2*Math.PI;
-    var x1=cx+r*Math.cos(angle),y1=cy+r*Math.sin(angle);
-    angle+=sweep;
-    var x2=cx+r*Math.cos(angle),y2=cy+r*Math.sin(angle);
-    var xi1=cx+inner*Math.cos(angle-sweep),yi1=cy+inner*Math.sin(angle-sweep);
-    var xi2=cx+inner*Math.cos(angle),yi2=cy+inner*Math.sin(angle);
-    var large=sweep>Math.PI?1:0;
+    var mid=angle+sweep/2, end=angle+sweep;
+    // Slice
     var p=document.createElementNS("http://www.w3.org/2000/svg","path");
-    p.setAttribute("d","M"+x1+","+y1+" A"+r+","+r+" 0 "+large+" 1 "+x2+","+y2+" L"+xi2+","+yi2+" A"+inner+","+inner+" 0 "+large+" 0 "+xi1+","+yi1+" Z");
-    p.setAttribute("fill",d.color);p.setAttribute("stroke","#0d1117");p.setAttribute("stroke-width","2");svg.appendChild(p);
-    var li=document.createElement("div");li.className="legend-item";
-    li.innerHTML='<span style="width:10px;height:10px;border-radius:2px;background:'+d.color+';display:inline-block"></span>'+d.name+' ('+(d.value/total*100).toFixed(1)+'%)';
-    leg.appendChild(li);
+    p.setAttribute("d",pieArc(CX,CY,R,IR,angle,end));
+    p.setAttribute("fill",d.color);
+    p.style.transformOrigin=CX+"px "+CY+"px";
+    p.style.cursor="pointer";
+    p.style.transition="transform .35s cubic-bezier(.34,1.4,.64,1), filter .3s, opacity .3s";
+    p.style.animation="sliceReveal 0.5s "+(i*0.07+0.1)+"s both cubic-bezier(.34,1.4,.64,1)";
+    (function(idx){ p.addEventListener("click",function(){ selectPieSlice(cats,total,idx); }); })(i);
+    svg.appendChild(p);
+    // Depth overlay
+    var ov=document.createElementNS("http://www.w3.org/2000/svg","path");
+    ov.setAttribute("d",pieArc(CX,CY,R,IR,angle,end));
+    ov.setAttribute("fill","url(#pdepth)"); ov.style.pointerEvents="none";
+    svg.appendChild(ov);
+    d._p=p; d._mid=mid; angle=end;
+
+    // Legend item
+    var item=document.createElement("div");
+    item.style.cssText="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;cursor:pointer;border:1.5px solid var(--border);transition:all .2s;animation:fadeSlide .4s "+(i*0.07+0.35)+"s both";
+    item.innerHTML='<span style="width:10px;height:10px;border-radius:3px;background:'+d.color+';flex-shrink:0;transition:transform .25s cubic-bezier(.34,1.56,.64,1)"></span>'+
+      '<span style="flex:1;font-size:13px;font-weight:600;color:#C8D0E0">'+d.name+'</span>'+
+      '<div style="text-align:right"><div style="font-family:\'Space Grotesk\',sans-serif;font-size:13px;font-weight:700;color:#fff">'+inr(d.value)+'</div>'+
+      '<div style="font-size:11px;font-weight:600;color:var(--muted)">'+((d.value/total)*100).toFixed(1)+'%</div></div>';
+    (function(idx){ item.addEventListener("click",function(){ selectPieSlice(cats,total,idx); }); })(i);
+    legEl.appendChild(item);
+    d._leg=item;
   });
-  var c=document.createElementNS("http://www.w3.org/2000/svg","circle");
-  c.setAttribute("cx",cx);c.setAttribute("cy",cy);c.setAttribute("r",inner);c.setAttribute("fill","#0d1117");svg.appendChild(c);
-  var t1=document.createElementNS("http://www.w3.org/2000/svg","text");
-  t1.setAttribute("x",cx);t1.setAttribute("y",cy-8);t1.setAttribute("text-anchor","middle");t1.setAttribute("fill","#8899aa");t1.setAttribute("font-size","10");t1.setAttribute("font-family","DM Sans,sans-serif");t1.setAttribute("font-weight","600");t1.textContent="TOTAL";svg.appendChild(t1);
-  var t2=document.createElementNS("http://www.w3.org/2000/svg","text");
-  t2.setAttribute("x",cx);t2.setAttribute("y",cy+10);t2.setAttribute("text-anchor","middle");t2.setAttribute("fill","#6C63FF");t2.setAttribute("font-size","9");t2.setAttribute("font-family","DM Sans,sans-serif");t2.setAttribute("font-weight","700");t2.textContent=inr(total);svg.appendChild(t2);
+
+  // Hole
+  var hole=document.createElementNS("http://www.w3.org/2000/svg","circle");
+  hole.setAttribute("cx",CX); hole.setAttribute("cy",CY); hole.setAttribute("r",IR);
+  hole.setAttribute("fill","#161b27"); svg.appendChild(hole);
+  // Inner ring
+  var ring=document.createElementNS("http://www.w3.org/2000/svg","circle");
+  ring.setAttribute("cx",CX); ring.setAttribute("cy",CY); ring.setAttribute("r",IR+1);
+  ring.setAttribute("fill","none"); ring.setAttribute("stroke","#2a3040"); ring.setAttribute("stroke-width","1.5");
+  svg.appendChild(ring);
+
+  // Update center to total
+  document.getElementById("pie-icon").textContent="💼";
+  document.getElementById("pie-cat").textContent="Portfolio";
+  document.getElementById("pie-cat").style.color="var(--muted)";
+  document.getElementById("pie-amt").textContent=inr(total);
+  document.getElementById("pie-pct").textContent="100%";
+  document.getElementById("pie-pct").style.color="var(--accent)";
+
+  // Auto-cycle through slices on first load
+  if(cats.length>1){
+    var idx=0;
+    function cycle(){
+      selectPieSlice(cats,total,idx);
+      idx++;
+      if(idx<cats.length){ pieCycleTimer=setTimeout(cycle,700); }
+      else { pieCycleTimer=setTimeout(function(){ deselectPie(cats,total); },700); }
+    }
+    pieCycleTimer=setTimeout(cycle,1000);
+  }
+}
+
+function getCatEmoji(cat){
+  var map={"Mutual Fund":"📈","Gold":"🪙","Silver":"🥈","Fixed Deposit":"🏦","Recurring Deposit":"🔄","Stocks":"📊","Real Estate":"🏠","Savings Account":"💰","Crypto":"₿","Other":"💼"};
+  return map[cat]||"💰";
 }
 
 // ── CATEGORY LIST ──────────────────────────────────────────
