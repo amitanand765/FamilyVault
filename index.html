@@ -290,7 +290,7 @@
             <div id="pie-pct" style="font-size:11px;font-weight:700;color:var(--accent);margin-top:2px">100%</div>
           </div>
         </div>
-        <div id="pie-legend" style="margin-top:16px;display:flex;flex-direction:column;gap:6px"></div>
+        <div id="pie-legend" style="margin-top:14px;display:flex;flex-wrap:wrap;gap:6px;justify-content:center"></div>
       </div>
       <div class="card">
         <div class="sec-lbl">By Category</div>
@@ -1135,8 +1135,8 @@ function selectPieSlice(cats, total, i) {
     if(dd._leg){
       dd._leg.style.opacity      = j===i ? "1" : "0.4";
       dd._leg.style.borderColor  = j===i ? dd.color : "var(--border)";
-      dd._leg.style.background   = j===i ? "#141C2C" : "transparent";
-      dd._leg.style.transform    = j===i ? "translateX(4px)" : "";
+      dd._leg.style.background   = j===i ? dd.color+"22" : "transparent";
+      dd._leg.style.transform    = "";
     }
   });
   var icon=document.getElementById("pie-icon");
@@ -1237,13 +1237,12 @@ function renderPie(total, invList) {
     svg.appendChild(ov);
     d._p=p; d._mid=mid; angle=end;
 
-    // Legend item
+    // Legend item - compact
     var item=document.createElement("div");
-    item.style.cssText="display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:12px;cursor:pointer;border:1.5px solid var(--border);transition:all .2s;animation:fadeSlide .4s "+(i*0.07+0.35)+"s both";
-    item.innerHTML='<span style="width:10px;height:10px;border-radius:3px;background:'+d.color+';flex-shrink:0;transition:transform .25s cubic-bezier(.34,1.56,.64,1)"></span>'+
-      '<span style="flex:1;font-size:13px;font-weight:600;color:#C8D0E0">'+d.name+'</span>'+
-      '<div style="text-align:right"><div style="font-family:\'Space Grotesk\',sans-serif;font-size:13px;font-weight:700;color:#fff">'+inr(d.value)+'</div>'+
-      '<div style="font-size:11px;font-weight:600;color:var(--muted)">'+((d.value/total)*100).toFixed(1)+'%</div></div>';
+    item.style.cssText="display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:8px;cursor:pointer;border:1px solid var(--border);transition:all .2s;animation:fadeSlide .4s "+(i*0.07+0.35)+"s both;flex-shrink:0";
+    item.innerHTML='<span style="width:8px;height:8px;border-radius:2px;background:'+d.color+';flex-shrink:0"></span>'+
+      '<span style="font-size:12px;font-weight:600;color:#C8D0E0;white-space:nowrap">'+d.name+'</span>'+
+      '<span style="font-size:11px;font-weight:700;color:#fff;margin-left:2px">'+((d.value/total)*100).toFixed(0)+'%</span>';
     (function(idx){ item.addEventListener("click",function(){ selectPieSlice(cats,total,idx); }); })(i);
     legEl.appendChild(item);
     d._leg=item;
