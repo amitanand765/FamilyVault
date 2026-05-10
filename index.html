@@ -175,8 +175,9 @@
   <div class="auth-form">
     <input id="auth-email" class="auth-input" type="email" placeholder="Email address"/>
     <input id="auth-pass" class="auth-input" type="password" placeholder="Password (min 6 chars)"/>
-    <div style="text-align:right;margin-top:-8px;margin-bottom:12px">
+    <div style="text-align:right;margin-top:-8px;margin-bottom:12px;display:flex;justify-content:space-between">
       <button onclick="toggleAuthPass()" id="pass-toggle" style="background:none;border:none;color:var(--accent);font-size:12px;font-family:inherit;cursor:pointer;font-weight:600">Show Password</button>
+      <button onclick="forgotPassword()" style="background:none;border:none;color:var(--muted);font-size:12px;font-family:inherit;cursor:pointer;font-weight:600">Forgot Password?</button>
     </div>
     <input id="auth-name" class="auth-input" type="text" placeholder="Your first name" style="display:none"/>
     <div class="auth-err" id="auth-err"></div>
@@ -452,6 +453,24 @@ function showScreen(id) {
 }
 
 // ── AUTH ───────────────────────────────────────────────────
+function forgotPassword() {
+  var email = document.getElementById("auth-email").value.trim();
+  var err   = document.getElementById("auth-err");
+  if(!email) {
+    err.textContent = "Please enter your email address first";
+    return;
+  }
+  auth.sendPasswordResetEmail(email).then(function() {
+    err.style.color = "var(--green)";
+    err.textContent = "✅ Reset link sent to " + email + ". Check your inbox!";
+    setTimeout(function(){ err.style.color = "var(--red)"; err.textContent = ""; }, 5000);
+  }).catch(function(e) {
+    err.textContent = e.code === "auth/user-not-found" 
+      ? "No account found with this email" 
+      : e.message;
+  });
+}
+
 function toggleAuthPass() {
   var input = document.getElementById("auth-pass");
   var btn   = document.getElementById("pass-toggle");
