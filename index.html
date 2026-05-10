@@ -249,6 +249,9 @@
 
     <!-- DASHBOARD -->
     <div id="tab-dashboard">
+      <!-- Member View Toggle -->
+      <div id="member-toggle" style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap"></div>
+
       <div id="invite-banner" style="display:none" class="invite-banner">
         <div>
           <div style="font-size:12px;color:#8899aa;margin-bottom:4px">👥 Invite your family</div>
@@ -496,7 +499,9 @@ function toggleAuthPass() {
   }
 }
 
-var authMode = "signin";
+var expandedCats = {};  // tracks which categories are expanded
+var viewMode     = "all"; // "all" or a member uid
+var membersCache = [];    // cached members list for toggle buttons
 function showAuthTab(mode) {
   authMode = mode;
   document.querySelectorAll(".auth-tab").forEach(function(b,i){
@@ -736,7 +741,32 @@ function updateInviteBanner() {
   });
 }
 
+function setViewMode(mode) {
+  viewMode = mode;
+  renderDashboard();
+  // Update toggle button styles
+  document.querySelectorAll(".member-toggle-btn").forEach(function(b) {
+    b.style.background   = b.dataset.mode === mode ? "var(--accent)" : "var(--card)";
+    b.style.color        = b.dataset.mode === mode ? "#fff" : "var(--muted)";
+    b.style.borderColor  = b.dataset.mode === mode ? "var(--accent)" : "var(--border)";
+  });
+}
+
+function renderMemberToggle() {
+  var el = document.getElementById("member-toggle");
+  if(membersCache.length <= 1) { el.innerHTML = ""; return; } // hide if solo
+  var buttons = '<button class="member-toggle-btn" data-mode="all" onclick="setViewMode(\'all\')" style="background:var(--accent);color:#fff;border:1.5px solid var(--accent);border-radius:20px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">👨‍👩‍👧 Family</button>';
+  membersCache.forEach(function(m) {
+    var isMe = m.uid === currentUser.uid;
+    var label = (isMe ? "👤 " : "👤 ") + (m.name || m.email.split("@")[0]);
+    buttons += '<button class="member-toggle-btn" data-mode="'+m.uid+'" onclick="setViewMode(\''+m.uid+'\')" style="background:var(--card);color:var(--muted);border:1.5px solid var(--border);border-radius:20px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">'+label+'</button>';
+  });
+  el.innerHTML = buttons;
+}
+
 function renderMembers(mems) {
+  membersCache = mems;
+  renderMemberToggle();
   var el = document.getElementById("members-list");
   if(!mems.length){el.innerHTML='<div style="color:var(--muted);font-size:14px">No members yet</div>';return;}
   el.innerHTML = mems.map(function(m) {
@@ -935,7 +965,8 @@ function saveInv() {
     withdrawable:   document.getElementById("f-with").value,
     notes:          document.getElementById("f-notes").value.trim(),
     history:        currentHistory,
-    addedBy:        currentUser.displayName || currentUser.email.split("@")[0]
+    addedBy:        currentUser.displayName || currentUser.email.split("@")[0],
+    addedByUid:     currentUser.uid
   };
   fsaveInv(obj).then(function(){ closeModal("inv-ov"); }).catch(function(e){ alert("Error: "+e.message); });
 }
@@ -974,10 +1005,21 @@ function togglePass(id){showPass[id]=!showPass[id];renderCredList();}
 
 // ── DASHBOARD ──────────────────────────────────────────────
 function renderDashboard() {
-  var tc=investments.reduce(function(s,i){return s+i.currentValue;},0);
-  var ti=investments.reduce(function(s,i){return s+i.investedAmount;},0);
+  // Filter investments based on view mode
+  var filtered = viewMode === "all" ? investments :
+    investments.filter(function(i){ return i.addedByUid === viewMode; });
+
+  // Show view mode label
+  var modeLabel = "";
+  if(viewMode !== "all") {
+    var m = membersCache.find(function(m){ return m.uid === viewMode; });
+    modeLabel = m ? " · "+m.name+"'s investments" : "";
+  }
+
+  var tc=filtered.reduce(function(s,i){return s+i.currentValue;},0);
+  var ti=filtered.reduce(function(s,i){return s+i.investedAmount;},0);
   var gain=tc-ti, gp=ti>0?(gain/ti*100):0, gc=gain>=0?"var(--green)":"var(--red)";
-  var wd=investments.filter(function(i){return i.withdrawable==="yes";}).reduce(function(s,i){return s+i.currentValue;},0);
+  var wd=filtered.filter(function(i){return i.withdrawable==="yes";}).reduce(function(s,i){return s+i.currentValue;},0);
   document.getElementById("d-cur").textContent=inr(tc);
   document.getElementById("d-inv").textContent=inr(ti);
   document.getElementById("d-gain").style.color=gc;
@@ -987,7 +1029,7 @@ function renderDashboard() {
   document.getElementById("d-gain-card").style.borderColor=gain>=0?"#2ECC7144":"#E74C3C44";
   document.getElementById("d-with").textContent=inr(wd);
   document.getElementById("d-lock").textContent="Locked: "+inr(tc-wd);
-  renderChart(); renderPie(tc); renderCats();
+  renderChart(filtered); renderPie(tc, filtered); renderCats(filtered);
 }
 
 // ── CHART ──────────────────────────────────────────────────
@@ -997,11 +1039,11 @@ function setView(v) {
   document.getElementById("btn-year").classList.toggle("active",v==="year");
   renderChart();
 }
-function renderChart() {
+function renderChart(invList) {
+  invList = invList || investments;
   var el=document.getElementById("chart-area");
-  // Build addedMap from history arrays
   var addedMap={};
-  investments.forEach(function(inv){
+  invList.forEach(function(inv){
     var entries = inv.history && inv.history.length ? inv.history :
                   (inv.date ? [{date:inv.date, amount:inv.investedAmount}] : []);
     entries.forEach(function(h){
@@ -1050,19 +1092,19 @@ function renderChart() {
 }
 
 // ── PIE CHART ──────────────────────────────────────────────
-function renderPie(total) {
+function renderPie(total, invList) {
+  invList = invList || investments;
   var svg=document.getElementById("pie-svg"),leg=document.getElementById("pie-legend");
   svg.innerHTML="";leg.innerHTML="";
   var cx=110,cy=110,r=80,inner=48;
   if(!total){svg.innerHTML='<circle cx="110" cy="110" r="80" fill="#161b27" stroke="#2a3040" stroke-width="2"/><text x="110" y="115" text-anchor="middle" fill="#556" font-size="13" font-family="DM Sans,sans-serif">No data</text>';return;}
-  // Build dynamic category list from actual investments
-  var catMap = {};
-  investments.forEach(function(i){
-    if(!catMap[i.category]) catMap[i.category] = 0;
-    catMap[i.category] += i.currentValue;
+  var catMap={};
+  invList.forEach(function(i){
+    if(!catMap[i.category]) catMap[i.category]=0;
+    catMap[i.category]+=i.currentValue;
   });
-  var cats = Object.keys(catMap).filter(function(c){ return catMap[c]>0; }).map(function(c){
-    return {name:c, color:getCatColor(c), value:catMap[c]};
+  var cats=Object.keys(catMap).filter(function(c){return catMap[c]>0;}).map(function(c){
+    return{name:c,color:getCatColor(c),value:catMap[c]};
   });
   var angle=-Math.PI/2;
   cats.forEach(function(d){
@@ -1089,24 +1131,70 @@ function renderPie(total) {
 }
 
 // ── CATEGORY LIST ──────────────────────────────────────────
-function renderCats() {
+function toggleCat(catName) {
+  expandedCats[catName] = !expandedCats[catName];
+  var filtered = viewMode === "all" ? investments :
+    investments.filter(function(i){ return i.addedByUid === viewMode; });
+  renderCats(filtered);
+}
+
+function renderCats(invList) {
+  invList = invList || investments;
   var el=document.getElementById("cat-list");
-  var catMap = {};
-  investments.forEach(function(i){
-    if(!catMap[i.category]) catMap[i.category] = [];
+  var catMap={};
+  invList.forEach(function(i){
+    if(!catMap[i.category]) catMap[i.category]=[];
     catMap[i.category].push(i);
   });
-  var cats = Object.keys(catMap).map(function(c){
-    return {name:c, color:getCatColor(c), items:catMap[c]};
+  var cats=Object.keys(catMap).map(function(c){
+    return{name:c,color:getCatColor(c),items:catMap[c]};
   });
   if(!cats.length){el.innerHTML='<div class="empty"><div class="empty-icon">📊</div><p>No investments yet</p></div>';return;}
   el.innerHTML=cats.map(function(d){
     var cur=d.items.reduce(function(s,i){return s+i.currentValue;},0);
     var inv=d.items.reduce(function(s,i){return s+i.investedAmount;},0);
     var p=inv>0?((cur-inv)/inv*100):0,gc=p>=0?"var(--green)":"var(--red)";
-    return '<div class="cat-row"><span style="width:10px;height:10px;border-radius:50%;background:'+d.color+';flex-shrink:0"></span>'+
-      '<div style="flex:1"><div style="font-size:14px;font-weight:600">'+d.name+'</div><div style="font-size:12px;color:var(--muted)">'+d.items.length+' item'+(d.items.length>1?"s":"")+'</div></div>'+
-      '<div style="text-align:right"><div style="font-size:14px;font-weight:700">'+inr(cur)+'</div><div style="font-size:12px;font-weight:600;color:'+gc+'">'+pct(p)+'</div></div></div>';
+    var isExpanded=expandedCats[d.name];
+    var arrow=isExpanded?"▲":"▼";
+    var lineItems="";
+    if(isExpanded){
+      lineItems='<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">';
+      lineItems+=d.items.map(function(inv){
+        var ig=inv.currentValue-inv.investedAmount;
+        var ip=inv.investedAmount>0?(ig/inv.investedAmount*100):0;
+        var igc=ig>=0?"var(--green)":"var(--red)";
+        var wTag=inv.withdrawable==="yes"
+          ?'<span style="font-size:10px;background:#2ECC7122;color:var(--green);border-radius:10px;padding:2px 6px;font-weight:600;margin-right:4px">W</span>'
+          :'<span style="font-size:10px;background:#E74C3C22;color:var(--red);border-radius:10px;padding:2px 6px;font-weight:600;margin-right:4px">L</span>';
+        return '<div onclick=\'openInvModal('+JSON.stringify(inv)+')\' style="display:flex;align-items:center;padding:8px 10px;margin-bottom:6px;background:var(--bg);border-radius:10px;cursor:pointer;gap:8px">'+
+          '<div style="flex:1;min-width:0">'+
+            '<div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+inv.name+'</div>'+
+            '<div style="margin-top:2px">'+wTag+(inv.addedBy?'<span style="font-size:10px;color:var(--muted)">'+inv.addedBy+'</span>':"")+
+            '</div>'+
+          '</div>'+
+          '<div style="text-align:right;flex-shrink:0">'+
+            '<div style="font-size:13px;font-weight:700;color:var(--text)">'+inr(inv.currentValue)+'</div>'+
+            '<div style="font-size:11px;font-weight:600;color:'+igc+'">'+pct(ip)+'</div>'+
+          '</div>'+
+        '</div>';
+      }).join("");
+      lineItems+='</div>';
+    }
+    return '<div class="cat-row" style="flex-direction:column;align-items:stretch">'+
+      '<div style="display:flex;align-items:center;gap:12px;cursor:pointer" onclick="toggleCat(\''+d.name.replace(/'/g,"\\'")+'\')">'+ 
+        '<span style="width:10px;height:10px;border-radius:50%;background:'+d.color+';flex-shrink:0"></span>'+
+        '<div style="flex:1">'+
+          '<div style="font-size:14px;font-weight:600;color:var(--text)">'+d.name+'</div>'+
+          '<div style="font-size:12px;color:var(--muted)">'+d.items.length+' item'+(d.items.length>1?"s":"")+(isExpanded?" · tap to collapse":" · tap to expand")+'</div>'+
+        '</div>'+
+        '<div style="text-align:right">'+
+          '<div style="font-size:14px;font-weight:700">'+inr(cur)+'</div>'+
+          '<div style="font-size:12px;font-weight:600;color:'+gc+'">'+pct(p)+'</div>'+
+        '</div>'+
+        '<span style="font-size:10px;color:var(--muted);margin-left:4px">'+arrow+'</span>'+
+      '</div>'+
+      lineItems+
+    '</div>';
   }).join("");
 }
 
