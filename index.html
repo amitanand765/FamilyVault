@@ -695,16 +695,19 @@ function showVaultSetup() {
 
 function checkAndShowVaultBanner() {
   if(!familyCode || !currentUser) return;
+  // Show banner immediately, hide only if vault already set
+  var banner = document.getElementById("vault-banner");
+  if(banner) banner.style.display = "block";
   db.collection("families").doc(familyCode)
     .collection("vault").doc(currentUser.uid).get()
     .then(function(doc) {
-      var banner = document.getElementById("vault-banner");
-      if(!doc.exists || !doc.data().keyCheck) {
-        if(banner) banner.style.display = "block";
-      } else {
+      if(doc.exists && doc.data() && doc.data().keyCheck) {
+        // Vault already set — hide banner
         if(banner) banner.style.display = "none";
       }
-    }).catch(function(){});
+    }).catch(function(){
+      // Error checking — keep banner visible
+    });
 }
 
 // ── DATA MIGRATION ──────────────────────────────────────────
