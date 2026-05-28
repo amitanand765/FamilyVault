@@ -278,6 +278,13 @@
 
     <!-- DASHBOARD -->
     <div id="tab-dashboard">
+      <!-- Vault Setup Banner -->
+      <div id="vault-banner" style="display:none;background:linear-gradient(135deg,#0A6B7A,#085A67);border-radius:12px;padding:14px 16px;margin-bottom:14px;cursor:pointer" onclick="showVaultSetup()">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:#A5D8E0;margin-bottom:4px">🔐 Security</div>
+        <div style="font-family:'Playfair Display',serif;font-size:15px;font-weight:700;color:#fff;margin-bottom:3px">Encrypt Your Data</div>
+        <div style="font-family:'IBM Plex Sans',sans-serif;font-size:12px;color:#A5D8E0">Tap to set a vault password and protect your investments from anyone — including us.</div>
+      </div>
+
       <!-- Member View Toggle -->
       <div id="member-toggle" style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap"></div>
 
@@ -666,6 +673,38 @@ function proceedToAppUnencrypted() {
   showScreen("screen-app");
   switchTab("dashboard", document.querySelector(".tab"));
   startListeners();
+}
+
+function showVaultSetup() {
+  vaultMode = "set";
+  document.getElementById("vault-icon").textContent = "🛡️";
+  document.getElementById("vault-title").textContent = "Set Vault Password";
+  document.getElementById("vault-sub").textContent = "This encrypts all your data. Share this password with family members.";
+  document.getElementById("vault-pass").placeholder = "Create vault password";
+  document.getElementById("vault-pass2").style.display = "block";
+  document.getElementById("vault-btn").textContent = "Set Password & Encrypt Data";
+  document.getElementById("vault-btn").disabled = false;
+  document.getElementById("vault-skip").style.display = "block";
+  document.getElementById("vault-warn").style.display = "block";
+  document.getElementById("vault-warn").textContent = "⚠️ Remember this password! If you forget it, your data cannot be recovered.";
+  document.getElementById("vault-err").textContent = "";
+  document.getElementById("vault-pass").value = "";
+  document.getElementById("vault-pass2").value = "";
+  showScreen("screen-vault");
+}
+
+function checkAndShowVaultBanner() {
+  if(!familyCode || !currentUser) return;
+  db.collection("families").doc(familyCode)
+    .collection("vault").doc(currentUser.uid).get()
+    .then(function(doc) {
+      var banner = document.getElementById("vault-banner");
+      if(!doc.exists || !doc.data().keyCheck) {
+        if(banner) banner.style.display = "block";
+      } else {
+        if(banner) banner.style.display = "none";
+      }
+    }).catch(function(){});
 }
 
 // ── DATA MIGRATION ──────────────────────────────────────────
@@ -1076,6 +1115,7 @@ function renderMembers(mems) {
 function startListeners() {
   if(!familyCode) return;
   stopListeners();
+  checkAndShowVaultBanner();
   unsubInv = db.collection("families").doc(familyCode).collection("investments")
     .onSnapshot(function(snap){
       var promises = snap.docs.map(function(d){
