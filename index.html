@@ -163,7 +163,7 @@
     .legend{display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:center;margin-top:14px}
     .legend-item{display:flex;align-items:center;gap:6px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);font-weight:500}
     .err-text{font-family:'IBM Plex Sans',sans-serif;font-size:13px;color:var(--red);text-align:center;min-height:18px;margin-top:8px}
-    @keyframes sliceReveal{from{opacity:0;transform-origin:130px 130px;transform:scale(0.5)}to{opacity:1;transform:scale(1)}}
+    @keyframes sliceReveal{from{opacity:0;transform-origin:75px 75px;transform:scale(0.5)}to{opacity:1;transform:scale(1)}}
     @keyframes fadeSlide{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
   </style>
 </head>
@@ -315,16 +315,20 @@
       </div>
       <div class="card">
         <div class="sec-lbl">Portfolio Breakdown</div>
-        <div style="position:relative;width:260px;height:260px;margin:0 auto">
-          <svg id="pie-svg" viewBox="0 0 260 260" width="260" height="260" style="overflow:visible"></svg>
-          <div id="pie-center" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:110px;height:110px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;pointer-events:none">
-            <div id="pie-icon" style="font-size:20px;margin-bottom:4px;transition:transform .35s cubic-bezier(.34,1.56,.64,1)">💼</div>
-            <div id="pie-cat" style="font-family:'IBM Plex Mono',monospace;font-size:8px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:2px;transition:color .3s">Portfolio</div>
-            <div id="pie-amt" style="font-family:'Playfair Display',serif;font-size:16px;font-weight:700;color:var(--text);line-height:1">₹0</div>
-            <div id="pie-pct" style="font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:var(--accent);margin-top:3px">100%</div>
+        <div style="display:flex;gap:14px;align-items:center">
+          <!-- Small pie left -->
+          <div style="flex-shrink:0;position:relative;width:150px;height:150px">
+            <svg id="pie-svg" viewBox="0 0 150 150" width="150" height="150" style="overflow:visible"></svg>
+            <div id="pie-center" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:70px;text-align:center;pointer-events:none">
+              <div id="pie-icon" style="font-size:14px;margin-bottom:2px;transition:transform .3s cubic-bezier(.34,1.56,.64,1)">💼</div>
+              <div id="pie-cat" style="font-family:'IBM Plex Mono',monospace;font-size:7px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);transition:color .3s">Total</div>
+              <div id="pie-amt" style="font-family:'Playfair Display',serif;font-size:12px;font-weight:700;color:var(--text);line-height:1.1">₹0</div>
+              <div id="pie-pct" style="font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:700;color:var(--accent);margin-top:1px">100%</div>
+            </div>
           </div>
+          <!-- Legend list right -->
+          <div id="pie-legend" style="flex:1;display:flex;flex-direction:column;gap:0;overflow:hidden"></div>
         </div>
-        <div id="pie-legend" style="margin-top:16px;display:flex;flex-direction:column"></div>
       </div>
       <div class="card">
         <div class="sec-lbl">By Category</div>
@@ -1473,7 +1477,7 @@ function selectPieSlice(cats, total, i) {
     dd._p.style.opacity = j===i ? "1" : "0.3";
     dd._p.style.filter  = j===i ? "url(#pgf"+j+")" : "none";
     if(j===i){
-      var mx=Math.cos(dd._mid)*8, my=Math.sin(dd._mid)*8;
+      var mx=Math.cos(dd._mid)*5, my=Math.sin(dd._mid)*5;
       dd._p.style.transform="translate("+mx+"px,"+my+"px)";
     } else {
       dd._p.style.transform="";
@@ -1520,7 +1524,7 @@ function renderPie(total, invList) {
   var legEl=document.getElementById("pie-legend");
   svg.innerHTML=""; legEl.innerHTML="";
 
-  var CX=130,CY=130,R=118,IR=72;
+  var CX=75,CY=75,R=68,IR=40;
 
   if(!total){
     svg.innerHTML='<circle cx="130" cy="130" r="118" fill="#F5F2EB" stroke="#DDD8CC" stroke-width="1.5"/><text x="130" y="135" text-anchor="middle" fill="#7A7268" font-size="13" font-family="IBM Plex Sans,sans-serif">No data yet</text>';
@@ -1581,12 +1585,11 @@ function renderPie(total, invList) {
 
     // Legend item - compact pill
     var item=document.createElement("div");
-    item.style.cssText="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;transition:opacity .2s";
+    item.style.cssText="display:flex;align-items:center;gap:7px;padding:5px 0;border-bottom:1px solid var(--border);cursor:pointer;transition:opacity .2s";
     item.innerHTML=
-      '<span style="width:10px;height:10px;border-radius:2px;background:'+d.color+';flex-shrink:0"></span>'+
-      '<span style="font-family:\'IBM Plex Sans\',sans-serif;font-size:13px;font-weight:500;color:var(--text);flex:1">'+d.name+'</span>'+
-      '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:13px;font-weight:700;color:'+d.color+'">'+((d.value/total)*100).toFixed(1)+'%</span>'+
-      '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:12px;color:var(--muted);min-width:52px;text-align:right">'+inr(d.value)+'</span>';
+      '<span style="width:8px;height:8px;border-radius:2px;background:'+d.color+';flex-shrink:0"></span>'+
+      '<span style="font-family:\'IBM Plex Sans\',sans-serif;font-size:11px;font-weight:500;color:var(--text);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+d.name+'</span>'+
+      '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:10px;font-weight:700;color:'+d.color+';flex-shrink:0">'+((d.value/total)*100).toFixed(1)+'%</span>';
     (function(idx){ item.addEventListener("click",function(){ selectPieSlice(cats,total,idx); }); })(i);
     legEl.appendChild(item);
     d._leg=item;
