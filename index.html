@@ -238,6 +238,21 @@
   </div>
 </div>
 
+<!-- ── VAULT PASSWORD SCREEN ── -->
+<div id="screen-vault" class="screen center-screen">
+  <div class="setup-icon" id="vault-icon">🔐</div>
+  <div class="setup-title" id="vault-title">Set Vault Password</div>
+  <div class="setup-sub" id="vault-sub">This encrypts your data. Even we cannot read it.<br/>Share this password with your family members.</div>
+  <div style="width:100%;max-width:300px">
+    <div class="warn" id="vault-warn" style="display:none;text-align:left;font-size:12px"></div>
+    <input id="vault-pass" class="auth-input" type="password" placeholder="Enter vault password"/>
+    <input id="vault-pass2" class="auth-input" type="password" placeholder="Confirm vault password" style="display:none"/>
+    <div class="err-text" id="vault-err"></div>
+    <button class="bp" onclick="submitVaultPass()" id="vault-btn">Set Password & Encrypt Data</button>
+    <button class="bp grey" onclick="skipVaultPass()" id="vault-skip" style="display:none">Skip for now</button>
+  </div>
+</div>
+
 <!-- ── APP SCREEN ── -->
 <div id="screen-app" class="screen" style="flex-direction:column">
   <div class="header">
@@ -484,16 +499,255 @@ var unsubCred     = null;
 var unsubMembers  = null;
 
 // ── SCREEN MANAGER ─────────────────────────────────────────
-var screens = ["screen-loading","screen-login","screen-setup","screen-create","screen-join","screen-app"];
+var screens = ["screen-loading","screen-login","screen-setup","screen-create","screen-join","screen-vault","screen-app"];
 function showScreen(id) {
   screens.forEach(function(s) {
     var el = document.getElementById(s);
-    if(s === id) {
-      el.classList.add("active");
-    } else {
-      el.classList.remove("active");
-    }
+    if(s === id) { el.classList.add("active"); }
+    else { el.classList.remove("active"); }
   });
+}
+
+// ── CRYPTO ENGINE ──────────────────────────────────────────
+var vaultKey = null; // in-memory only, never stored
+
+function strToBytes(str) {
+  return new TextEncoder().encode(str);
+}
+function bytesToStr(bytes) {
+  return new TextDecoder().decode(bytes);
+}
+function bytesToB64(bytes) {
+  return btoa(String.fromCharCode.apply(null, new Uint8Array(bytes)));
+}
+function b64ToBytes(b64) {
+  return Uint8Array.from(atob(b64), function(c){ return c.charCodeAt(0); });
+}
+
+async function deriveKey(password, salt) {
+  var passKey = await crypto.subtle.importKey(
+    "raw", strToBytes(password), "PBKDF2", false, ["deriveKey"]
+  );
+  return crypto.subtle.deriveKey(
+    {name:"PBKDF2", salt:salt, iterations:100000, hash:"SHA-256"},
+    passKey,
+    {name:"AES-GCM", length:256},
+    false, ["encrypt","decrypt"]
+  );
+}
+
+async function encryptData(data, key) {
+  var iv = crypto.getRandomValues(new Uint8Array(12));
+  var enc = await crypto.subtle.encrypt(
+    {name:"AES-GCM", iv:iv},
+    key,
+    strToBytes(JSON.stringify(data))
+  );
+  return bytesToB64(iv) + ":" + bytesToB64(enc);
+}
+
+async function decryptData(cipher, key) {
+  var parts = cipher.split(":");
+  if(parts.length !== 2) throw new Error("Invalid cipher");
+  var iv  = b64ToBytes(parts[0]);
+  var enc = b64ToBytes(parts[1]);
+  var dec = await crypto.subtle.decrypt({name:"AES-GCM", iv:iv}, key, enc);
+  return JSON.parse(bytesToStr(dec));
+}
+
+// Derive a stable salt from the family code (no need to store)
+function getFamilySalt(code) {
+  var s = strToBytes("FamilyVault-" + code + "-v1");
+  var salt = new Uint8Array(16);
+  for(var i=0;i<Math.min(s.length,16);i++) salt[i]=s[i];
+  return salt;
+}
+
+// ── VAULT PASSWORD FLOW ────────────────────────────────────
+var vaultMode = "set"; // "set" or "unlock"
+
+async function checkVaultStatus() {
+  // Check if vault is already set up for this family
+  try {
+    var doc = await db.collection("families").doc(familyCode)
+      .collection("vault").doc(currentUser.uid).get();
+    if(doc.exists && doc.data().keyCheck) {
+      // Vault exists — ask user to unlock
+      vaultMode = "unlock";
+      document.getElementById("vault-icon").textContent = "🔐";
+      document.getElementById("vault-title").textContent = "Unlock Your Vault";
+      document.getElementById("vault-sub").textContent = "Enter your vault password to decrypt your data.";
+      document.getElementById("vault-pass").placeholder = "Enter vault password";
+      document.getElementById("vault-pass2").style.display = "none";
+      document.getElementById("vault-btn").textContent = "Unlock & Open App";
+      document.getElementById("vault-skip").style.display = "block";
+      document.getElementById("vault-warn").style.display = "none";
+      showScreen("screen-vault");
+    } else {
+      // New vault — set it up
+      vaultMode = "set";
+      document.getElementById("vault-icon").textContent = "🛡️";
+      document.getElementById("vault-title").textContent = "Set Vault Password";
+      document.getElementById("vault-sub").textContent = "This encrypts all your data. Share this password with family members.";
+      document.getElementById("vault-pass").placeholder = "Create vault password";
+      document.getElementById("vault-pass2").style.display = "block";
+      document.getElementById("vault-btn").textContent = "Set Password & Encrypt Data";
+      document.getElementById("vault-skip").style.display = "block";
+      document.getElementById("vault-warn").style.display = "block";
+      document.getElementById("vault-warn").textContent =
+        "⚠️ Remember this password! If you forget it, your data cannot be recovered. Share it with family members via WhatsApp.";
+      showScreen("screen-vault");
+    }
+  } catch(e) {
+    // Can't check vault — go to app unencrypted
+    proceedToAppUnencrypted();
+  }
+}
+
+async function submitVaultPass() {
+  var pass  = document.getElementById("vault-pass").value;
+  var pass2 = document.getElementById("vault-pass2").value;
+  var err   = document.getElementById("vault-err");
+  var btn   = document.getElementById("vault-btn");
+
+  if(!pass || pass.length < 6) {
+    err.textContent = "Vault password must be at least 6 characters"; return;
+  }
+  if(vaultMode === "set" && pass !== pass2) {
+    err.textContent = "Passwords do not match"; return;
+  }
+
+  btn.textContent = vaultMode === "set" ? "Encrypting..." : "Unlocking...";
+  btn.disabled = true;
+  err.textContent = "";
+
+  try {
+    var salt = getFamilySalt(familyCode);
+    var key  = await deriveKey(pass, salt);
+
+    if(vaultMode === "set") {
+      // Store a key verification token so we can detect wrong passwords later
+      var checkToken = await encryptData({check:"FamilyVault-OK", uid:currentUser.uid}, key);
+      await db.collection("families").doc(familyCode)
+        .collection("vault").doc(currentUser.uid)
+        .set({keyCheck: checkToken, createdAt: Date.now()});
+      vaultKey = key;
+      // Migrate existing unencrypted data
+      await migrateExistingData();
+      proceedToAppUnencrypted(); // go to app (data now encrypted)
+    } else {
+      // Verify password by decrypting the check token
+      var doc = await db.collection("families").doc(familyCode)
+        .collection("vault").doc(currentUser.uid).get();
+      try {
+        var check = await decryptData(doc.data().keyCheck, key);
+        if(check.check !== "FamilyVault-OK") throw new Error("Wrong password");
+        vaultKey = key;
+        proceedToAppUnencrypted();
+      } catch(e) {
+        err.textContent = "Wrong vault password. Try again.";
+        btn.textContent = "Unlock & Open App";
+        btn.disabled = false;
+      }
+    }
+  } catch(e) {
+    err.textContent = "Error: " + e.message;
+    btn.textContent = vaultMode === "set" ? "Set Password & Encrypt Data" : "Unlock & Open App";
+    btn.disabled = false;
+  }
+}
+
+function skipVaultPass() {
+  vaultKey = null; // no encryption
+  proceedToAppUnencrypted();
+}
+
+function proceedToAppUnencrypted() {
+  showScreen("screen-app");
+  switchTab("dashboard", document.querySelector(".tab"));
+  startListeners();
+}
+
+// ── DATA MIGRATION ──────────────────────────────────────────
+async function migrateExistingData() {
+  if(!vaultKey) return;
+  try {
+    // Migrate investments
+    var invSnap = await db.collection("families").doc(familyCode)
+      .collection("investments").get();
+    var batch = db.batch();
+    var count = 0;
+    invSnap.forEach(function(doc) {
+      var data = doc.data();
+      if(data.encrypted) return; // already encrypted
+      // Will be encrypted on next save — mark for migration
+      count++;
+    });
+
+    if(count > 0) {
+      // Show migration progress
+      document.getElementById("vault-btn").textContent = "Encrypting " + count + " investments...";
+      for(var i=0; i<invSnap.docs.length; i++) {
+        var doc  = invSnap.docs[i];
+        var data = doc.data();
+        if(data.encrypted) continue;
+        // Encrypt the entire document data
+        var encData = await encryptData(data, vaultKey);
+        await db.collection("families").doc(familyCode)
+          .collection("investments").doc(doc.id)
+          .set({encrypted:true, data:encData, id:doc.id, addedByUid:data.addedByUid||""});
+      }
+    }
+
+    // Migrate credentials
+    var credSnap = await db.collection("families").doc(familyCode)
+      .collection("credentials").get();
+    for(var j=0; j<credSnap.docs.length; j++) {
+      var cdoc  = credSnap.docs[j];
+      var cdata = cdoc.data();
+      if(cdata.encrypted) continue;
+      var encCred = await encryptData(cdata, vaultKey);
+      await db.collection("families").doc(familyCode)
+        .collection("credentials").doc(cdoc.id)
+        .set({encrypted:true, data:encCred, id:cdoc.id});
+    }
+  } catch(e) {
+    console.error("Migration error:", e);
+    // Don't block the user — they can still use the app
+  }
+}
+
+// ── ENCRYPTED SAVE / LOAD HELPERS ─────────────────────────
+async function fsaveInv(obj) {
+  if(vaultKey) {
+    var enc = await encryptData(obj, vaultKey);
+    return db.collection("families").doc(familyCode)
+      .collection("investments").doc(obj.id)
+      .set({encrypted:true, data:enc, id:obj.id, addedByUid:obj.addedByUid||""});
+  }
+  return db.collection("families").doc(familyCode)
+    .collection("investments").doc(obj.id).set(obj);
+}
+
+async function fdelInv(id) {
+  return db.collection("families").doc(familyCode)
+    .collection("investments").doc(id).delete();
+}
+
+async function fsaveCred(obj) {
+  if(vaultKey) {
+    var enc = await encryptData(obj, vaultKey);
+    return db.collection("families").doc(familyCode)
+      .collection("credentials").doc(obj.id)
+      .set({encrypted:true, data:enc, id:obj.id});
+  }
+  return db.collection("families").doc(familyCode)
+    .collection("credentials").doc(obj.id).set(obj);
+}
+
+async function fdelCred(id) {
+  return db.collection("families").doc(familyCode)
+    .collection("credentials").doc(id).delete();
 }
 
 // ── AUTH ───────────────────────────────────────────────────
@@ -604,8 +858,7 @@ function loadUserGroup() {
   db.collection("users").doc(currentUser.uid).get().then(function(doc) {
     if(doc.exists && doc.data().familyCode) {
       familyCode = doc.data().familyCode;
-      startListeners();
-      showScreen("screen-app");
+      checkVaultStatus();
       updateInviteBanner();
     } else {
       showScreen("screen-setup");
@@ -700,10 +953,9 @@ function joinGroup() {
     batch.set(db.collection("users").doc(uid), {familyCode: code}, {merge:true});
     return batch.commit();
   }).then(function() {
-    if(familyCode) return; // Already handled above if doc didn't exist
+    if(familyCode) return;
     familyCode = code;
-    startListeners();
-    showScreen("screen-app");
+    checkVaultStatus();
     updateInviteBanner();
   }).catch(function(e) {
     showScreen("screen-join");
@@ -716,8 +968,7 @@ function proceedToApp() {
     document.getElementById("create-err").textContent = "Still saving... please wait a moment.";
     return;
   }
-  startListeners();
-  showScreen("screen-app");
+  checkVaultStatus();
   updateInviteBanner();
 }
 
@@ -827,13 +1078,31 @@ function startListeners() {
   stopListeners();
   unsubInv = db.collection("families").doc(familyCode).collection("investments")
     .onSnapshot(function(snap){
-      investments = snap.docs.map(function(d){return d.data();});
-      renderDashboard(); renderInvList();
+      var promises = snap.docs.map(function(d){
+        var data = d.data();
+        if(data.encrypted && data.data && vaultKey) {
+          return decryptData(data.data, vaultKey).then(function(dec){ return dec; }).catch(function(){ return data; });
+        }
+        return Promise.resolve(data);
+      });
+      Promise.all(promises).then(function(decrypted){
+        investments = decrypted;
+        renderDashboard(); renderInvList();
+      });
     });
   unsubCred = db.collection("families").doc(familyCode).collection("credentials")
     .onSnapshot(function(snap){
-      credentials = snap.docs.map(function(d){return d.data();});
-      renderCredList();
+      var promises = snap.docs.map(function(d){
+        var data = d.data();
+        if(data.encrypted && data.data && vaultKey) {
+          return decryptData(data.data, vaultKey).then(function(dec){ return dec; }).catch(function(){ return data; });
+        }
+        return Promise.resolve(data);
+      });
+      Promise.all(promises).then(function(decrypted){
+        credentials = decrypted;
+        renderCredList();
+      });
     });
 }
 
@@ -842,11 +1111,6 @@ function stopListeners() {
   if(unsubCred)    { unsubCred();    unsubCred    = null; }
   if(unsubMembers) { unsubMembers(); unsubMembers = null; }
 }
-
-function fsaveInv(obj)  { return db.collection("families").doc(familyCode).collection("investments").doc(obj.id).set(obj); }
-function fsaveCred(obj) { return db.collection("families").doc(familyCode).collection("credentials").doc(obj.id).set(obj); }
-function fdelInv(id)    { return db.collection("families").doc(familyCode).collection("investments").doc(id).delete(); }
-function fdelCred(id)   { return db.collection("families").doc(familyCode).collection("credentials").doc(id).delete(); }
 
 // ── HELPERS ────────────────────────────────────────────────
 var CAT_COLORS = {"Mutual Fund":"#6C63FF","Gold":"#F5A623","Silver":"#A8B2C1","Fixed Deposit":"#2ECC71","Recurring Deposit":"#1ABC9C","Stocks":"#E74C3C","Real Estate":"#E67E22","Savings Account":"#3498DB","Crypto":"#F39C12","Other":"#95A5A6"};
