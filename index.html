@@ -1693,12 +1693,30 @@ function renderCredList() {
   }).join("");
 }
 
-// ── SERVICE WORKER ─────────────────────────────────────────
-// Unregister all service workers to fix caching issues
-if("serviceWorker" in navigator) {
-  navigator.serviceWorker.getRegistrations().then(function(regs) {
-    regs.forEach(function(reg) { reg.unregister(); });
-  });
+// ── VERSION CHECK + SERVICE WORKER ─────────────────────────
+var APP_VERSION = "v25-enc";
+var storedVersion = localStorage.getItem("fv_version");
+if(storedVersion && storedVersion !== APP_VERSION) {
+  // New version detected — clear cache and reload
+  localStorage.setItem("fv_version", APP_VERSION);
+  if("serviceWorker" in navigator) {
+    navigator.serviceWorker.getRegistrations().then(function(regs) {
+      regs.forEach(function(reg) { reg.unregister(); });
+      caches.keys().then(function(keys){
+        return Promise.all(keys.map(function(k){ return caches.delete(k); }));
+      }).then(function(){ window.location.reload(true); });
+    });
+  } else {
+    window.location.reload(true);
+  }
+} else {
+  localStorage.setItem("fv_version", APP_VERSION);
+  // Unregister old service workers silently
+  if("serviceWorker" in navigator) {
+    navigator.serviceWorker.getRegistrations().then(function(regs) {
+      regs.forEach(function(reg) { reg.unregister(); });
+    });
+  }
 }
 </script>
 </body>
