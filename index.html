@@ -1409,17 +1409,12 @@ async function saveInv() {
     addedBy:        currentUser.displayName || currentUser.email.split("@")[0],
     addedByUid:     currentUser.uid
   };
-  // Show saving state
-  var btn = document.querySelector("#inv-ov .bp");
-  var origText = btn ? btn.textContent : "";
-  if(btn) { btn.textContent = "Saving..."; btn.disabled = true; }
-  try {
-    await fsaveInv(obj);
-    closeModal("inv-ov");
-  } catch(e) {
-    alert("Error saving: " + e.message);
-    if(btn) { btn.textContent = origText; btn.disabled = false; }
-  }
+  // Close modal immediately — don't wait for Firebase
+  closeModal("inv-ov");
+  // Save in background
+  fsaveInv(obj).catch(function(e){
+    alert("Save failed: " + e.message + "\nPlease try again.");
+  });
 }
 
 // ── CREDENTIAL CRUD ────────────────────────────────────────
@@ -1443,7 +1438,8 @@ function saveCred() {
     password:document.getElementById("c-pass").value,
     notes:document.getElementById("c-notes").value.trim()
   };
-  fsaveCred(obj).then(function(){closeModal("cred-ov");}).catch(function(e){alert("Error: "+e.message);});
+  closeModal("cred-ov");
+  fsaveCred(obj).catch(function(e){alert("Save failed: "+e.message);});
 }
 
 // ── DELETE ─────────────────────────────────────────────────
@@ -1890,7 +1886,7 @@ function renderCredList() {
 }
 
 // ── VERSION CHECK + SERVICE WORKER ─────────────────────────
-var APP_VERSION = "v37-balchart";
+var APP_VERSION = "v38-fast";
 var storedVersion = localStorage.getItem("fv_version");
 if(storedVersion && storedVersion !== APP_VERSION) {
   // New version detected — clear cache and reload
