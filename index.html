@@ -1140,13 +1140,18 @@ function startListeners() {
     .onSnapshot(function(snap){
       var promises = snap.docs.map(function(d){
         var data = d.data();
-        if(data.encrypted && data.data && vaultKey) {
-          return decryptData(data.data, vaultKey).then(function(dec){ return dec; }).catch(function(){ return data; });
+        if(data.encrypted && data.data) {
+          if(vaultKey) {
+            return decryptData(data.data, vaultKey)
+              .then(function(dec){ return dec; })
+              .catch(function(){ return null; }); // decryption failed
+          }
+          return Promise.resolve(null); // no key — skip
         }
-        return Promise.resolve(data);
+        return Promise.resolve(data); // unencrypted
       });
-      Promise.all(promises).then(function(decrypted){
-        investments = decrypted;
+      Promise.all(promises).then(function(results){
+        investments = results.filter(function(d){ return d && d.name; });
         renderDashboard(); renderInvList();
       });
     });
@@ -1376,13 +1381,12 @@ function renderHistoryList() {
   }).join("");
 }
 
-function saveInv() {
+async function saveInv() {
   var name = document.getElementById("f-name").value.trim();
   var cur  = document.getElementById("f-cur").value;
   if(!name)           { alert("Please enter investment name"); return; }
   if(!cur)            { alert("Please enter current value"); return; }
   if(!currentHistory.length) { alert("Please add at least one investment entry"); return; }
-  // Calculate total invested correctly based on modes
   var nonBalance = currentHistory.filter(function(h){ return h.mode !== "balance"; });
   var balanceEntries = currentHistory.filter(function(h){ return h.mode === "balance"; });
   var totalInvested;
@@ -1405,7 +1409,17 @@ function saveInv() {
     addedBy:        currentUser.displayName || currentUser.email.split("@")[0],
     addedByUid:     currentUser.uid
   };
-  fsaveInv(obj).then(function(){ closeModal("inv-ov"); }).catch(function(e){ alert("Error: "+e.message); });
+  // Show saving state
+  var btn = document.querySelector("#inv-ov .bp");
+  var origText = btn ? btn.textContent : "";
+  if(btn) { btn.textContent = "Saving..."; btn.disabled = true; }
+  try {
+    await fsaveInv(obj);
+    closeModal("inv-ov");
+  } catch(e) {
+    alert("Error saving: " + e.message);
+    if(btn) { btn.textContent = origText; btn.disabled = false; }
+  }
 }
 
 // ── CREDENTIAL CRUD ────────────────────────────────────────
@@ -1843,7 +1857,7 @@ function renderCredList() {
 }
 
 // ── VERSION CHECK + SERVICE WORKER ─────────────────────────
-var APP_VERSION = "v32-modes";
+var APP_VERSION = "v34-fix";
 var storedVersion = localStorage.getItem("fv_version");
 if(storedVersion && storedVersion !== APP_VERSION) {
   // New version detected — clear cache and reload
