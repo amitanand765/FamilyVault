@@ -1504,28 +1504,14 @@ function renderChart(invList) {
   invList.forEach(function(inv){
     var entries = inv.history && inv.history.length ? inv.history :
                   (inv.date ? [{date:inv.date, amount:inv.investedAmount, mode:"add"}] : []);
-    // Check if this investment uses balance mode
-    var hasBalance = entries.some(function(h){ return h.mode === "balance"; });
-    if(hasBalance) {
-      // Balance mode — use the latest balance entry for each month
-      entries.forEach(function(h){
-        if(h.mode === "balance") {
-          var key = chartView==="year" ? h.date.slice(0,4) : h.date.slice(0,7);
-          balanceMap = balanceMap || {};
-          // Store balance per investment per month — will be resolved below
-          if(!inv._balKey) inv._balKey = inv.id || inv.name;
-          if(!balanceMap[inv._balKey]) balanceMap[inv._balKey] = {};
-          balanceMap[inv._balKey][key] = h.amount;
-        }
-      });
-    } else {
-      entries.forEach(function(h){
-        var key = chartView==="year" ? h.date.slice(0,4) : h.date.slice(0,7);
-        addedMap[key] = (addedMap[key]||0) + h.amount;
-      });
-    }
+    entries.forEach(function(h){
+      var key = chartView==="year" ? h.date.slice(0,4) : h.date.slice(0,7);
+      // All modes contribute to the addedMap for chart purposes
+      // Balance mode: treat the amount as the total for that investment that month
+      addedMap[key] = (addedMap[key]||0) + h.amount;
+    });
   });
-  if(!Object.keys(addedMap).length){el.innerHTML='<div class="empty"><div class="empty-icon">📈</div><p>Add investments to see chart</p></div>';return;}
+  if(!Object.keys(addedMap).length){el.innerHTML='<div class="empty"><div class="empty-icon">📈</div><p>Add investments with history entries to see chart</p></div>';return;}
   var keys=[];
   if(chartView==="month"){
     var first=Object.keys(addedMap).sort()[0];
@@ -1857,7 +1843,7 @@ function renderCredList() {
 }
 
 // ── VERSION CHECK + SERVICE WORKER ─────────────────────────
-var APP_VERSION = "v34-fix";
+var APP_VERSION = "v35-chart";
 var storedVersion = localStorage.getItem("fv_version");
 if(storedVersion && storedVersion !== APP_VERSION) {
   // New version detected — clear cache and reload
