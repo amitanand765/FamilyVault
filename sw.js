@@ -1,4 +1,4 @@
-const CACHE_NAME = "familyvault-v36";
+const CACHE_NAME = "familyvault-v37";
 
 self.addEventListener("install", e => {
   self.skipWaiting();
