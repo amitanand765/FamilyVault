@@ -1500,6 +1500,9 @@ function setView(v) {
 function renderChart(invList) {
   invList = invList || investments;
   var el=document.getElementById("chart-area");
+  // Debug — log what investments look like
+  console.log("[FV] renderChart invList:", invList.length, "items");
+  invList.forEach(function(inv,i){ console.log("[FV] inv["+i+"]:", JSON.stringify({name:inv.name,history:inv.history?inv.history.length:0,date:inv.date,amount:inv.investedAmount})); });
   var addedMap={};
   invList.forEach(function(inv){
     var entries = inv.history && inv.history.length ? inv.history :
@@ -1843,7 +1846,7 @@ function renderCredList() {
 }
 
 // ── VERSION CHECK + SERVICE WORKER ─────────────────────────
-var APP_VERSION = "v35-chart";
+var APP_VERSION = "v36-debug";
 var storedVersion = localStorage.getItem("fv_version");
 if(storedVersion && storedVersion !== APP_VERSION) {
   // New version detected — clear cache and reload
