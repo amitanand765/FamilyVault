@@ -431,15 +431,26 @@
 
     <!-- Investment History -->
     <div style="background:var(--bg);border-radius:12px;padding:14px;margin-bottom:14px">
-      <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px">💰 Investment History</div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin-bottom:12px">💰 Investment History</div>
       <div id="history-list" style="margin-bottom:12px"></div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;font-weight:600">Add New Entry:</div>
-      <div style="display:flex;gap:8px;align-items:flex-end">
-        <div style="flex:1"><label style="font-size:11px;color:var(--muted);font-weight:700;display:block;margin-bottom:4px">MONTH</label><input id="f-date" type="month" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:14px;font-family:inherit;outline:none"/></div>
-        <div style="flex:1"><label style="font-size:11px;color:var(--muted);font-weight:700;display:block;margin-bottom:4px">AMOUNT (₹)</label><input id="f-inv" type="number" placeholder="e.g. 5000" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:14px;font-family:inherit;outline:none"/></div>
-        <button onclick="addHistoryEntry()" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0">+ Add</button>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;font-weight:600">Add New Entry</div>
+
+      <!-- Entry Mode Toggle -->
+      <div style="display:flex;gap:0;background:#E8E4DC;border-radius:8px;padding:3px;margin-bottom:10px">
+        <button id="mode-add" onclick="setEntryMode('add')" style="flex:1;padding:7px;border:none;border-radius:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;background:var(--accent);color:#fff;transition:all .2s">➕ Add Amount</button>
+        <button id="mode-total" onclick="setEntryMode('total')" style="flex:1;padding:7px;border:none;border-radius:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;background:transparent;color:var(--muted);transition:all .2s">🔄 Set Total</button>
+        <button id="mode-balance" onclick="setEntryMode('balance')" style="flex:1;padding:7px;border:none;border-radius:6px;font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;background:transparent;color:var(--muted);transition:all .2s">📸 Balance</button>
       </div>
-      <div style="margin-top:10px;font-size:13px;color:var(--muted)">Total Invested: <b id="f-total" style="color:var(--text)">₹0</b></div>
+
+      <!-- Entry mode description -->
+      <div id="mode-desc" style="font-family:'IBM Plex Sans',sans-serif;font-size:11px;color:var(--muted);margin-bottom:10px;font-style:italic">Add the amount you invested this month</div>
+
+      <div style="display:flex;gap:8px;align-items:flex-end">
+        <div style="flex:1"><label style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:4px">Month</label><input id="f-date" type="month" style="width:100%;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:14px;font-family:inherit;outline:none"/></div>
+        <div style="flex:1"><label style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.1em;display:block;margin-bottom:4px" id="f-inv-label">Amount (₹)</label><input id="f-inv" type="number" placeholder="e.g. 5000" style="width:100%;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:14px;font-family:inherit;outline:none"/></div>
+        <button onclick="addHistoryEntry()" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px 14px;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0;letter-spacing:.04em">+ Add</button>
+      </div>
+      <div style="margin-top:10px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted)">Total Invested: <b id="f-total" style="color:var(--text)">₹0</b></div>
     </div>
 
     <button class="bp" onclick="saveInv()">Save Investment</button>
@@ -1234,6 +1245,8 @@ function openInvModal(inv) {
   document.getElementById("f-notes").value = inv ? (inv.notes||"") : "";
   document.getElementById("f-date").value  = new Date().toISOString().slice(0,7);
   document.getElementById("f-inv").value   = "";
+  entryMode = "add";
+  setEntryMode("add");
 
   // Load history — handle old format (single date/amount) and new format (history array)
   if(inv && inv.history && inv.history.length > 0) {
@@ -1248,21 +1261,77 @@ function openInvModal(inv) {
   openModal("inv-ov");
 }
 
+var entryMode = "add"; // "add" | "total" | "balance"
+
+function setEntryMode(mode) {
+  entryMode = mode;
+  var descs = {
+    add:     "Add the amount you invested this month",
+    total:   "Enter your total cumulative investment so far — app calculates the difference",
+    balance: "Replace with current balance (for savings/current accounts)"
+  };
+  var labels = {
+    add:     "Amount (₹)",
+    total:   "New Total (₹)",
+    balance: "Current Balance (₹)"
+  };
+  var placeholders = {
+    add:     "e.g. 1000",
+    total:   "e.g. 21000",
+    balance: "e.g. 25000"
+  };
+  document.getElementById("mode-desc").textContent = descs[mode];
+  document.getElementById("f-inv-label").textContent = labels[mode];
+  document.getElementById("f-inv").placeholder = placeholders[mode];
+  ["add","total","balance"].forEach(function(m) {
+    var btn = document.getElementById("mode-"+m);
+    btn.style.background = m===mode ? "var(--accent)" : "transparent";
+    btn.style.color      = m===mode ? "#fff" : "var(--muted)";
+  });
+}
+
 function addHistoryEntry() {
   var date   = document.getElementById("f-date").value;
   var amount = parseFloat(document.getElementById("f-inv").value);
-  if(!date) { alert("Please select a month"); return; }
-  if(!amount || amount <= 0) { alert("Please enter a valid amount"); return; }
-  // Check if entry for this month already exists
-  var exists = currentHistory.find(function(h){ return h.date === date; });
-  if(exists) {
-    if(!confirm("Entry for this month already exists (₹"+exists.amount+"). Add another entry for same month?")) return;
+  if(!date)                   { alert("Please select a month"); return; }
+  if(!amount || amount <= 0)  { alert("Please enter a valid amount"); return; }
+
+  var actualAmount = amount;
+
+  if(entryMode === "total") {
+    // User entered cumulative total — calculate delta from previous total
+    var prevTotal = currentHistory.filter(function(h){ return h.mode !== "balance"; })
+                                  .reduce(function(s,h){ return s+h.amount; }, 0);
+    actualAmount = amount - prevTotal;
+    if(actualAmount <= 0) {
+      alert("New total (₹"+amount+") must be greater than current total (₹"+prevTotal+").\nIf you want to reduce, use Balance mode.");
+      return;
+    }
   }
-  currentHistory.push({
-    date:     date,
-    amount:   amount,
-    addedBy:  currentUser.displayName || currentUser.email.split("@")[0]
-  });
+
+  if(entryMode === "balance") {
+    // Balance mode — remove all previous entries for this month and set fresh balance
+    currentHistory = currentHistory.filter(function(h){ return h.date !== date; });
+    currentHistory.push({
+      date:    date,
+      amount:  amount,
+      mode:    "balance",
+      addedBy: currentUser.displayName || currentUser.email.split("@")[0]
+    });
+  } else {
+    // Add or Total mode — check duplicate month
+    var exists = currentHistory.find(function(h){ return h.date === date && h.mode !== "balance"; });
+    if(exists) {
+      if(!confirm("Entry for this month already exists (₹"+exists.amount+"). Add another entry for same month?")) return;
+    }
+    currentHistory.push({
+      date:    date,
+      amount:  actualAmount,
+      mode:    entryMode,
+      addedBy: currentUser.displayName || currentUser.email.split("@")[0]
+    });
+  }
+
   currentHistory.sort(function(a,b){ return a.date > b.date ? 1 : -1; });
   document.getElementById("f-inv").value = "";
   renderHistoryList();
@@ -1275,25 +1344,33 @@ function removeHistoryEntry(index) {
 }
 
 function renderHistoryList() {
-  var el    = document.getElementById("history-list");
-  var total = currentHistory.reduce(function(s,h){ return s+h.amount; }, 0);
+  var el = document.getElementById("history-list");
+  var nonBalance = currentHistory.filter(function(h){ return h.mode !== "balance"; });
+  var balanceEntries = currentHistory.filter(function(h){ return h.mode === "balance"; });
+  var total = nonBalance.reduce(function(s,h){ return s+h.amount; }, 0);
+  if(balanceEntries.length > 0) total = balanceEntries[balanceEntries.length-1].amount;
   document.getElementById("f-total").textContent = inr(total);
   if(!currentHistory.length) {
-    el.innerHTML = '<div style="font-size:13px;color:#556;text-align:center;padding:8px 0">No entries yet. Add your first investment below.</div>';
+    el.innerHTML = '<div style="font-family:\'IBM Plex Sans\',sans-serif;font-size:12px;color:var(--muted);text-align:center;padding:8px 0">No entries yet. Add your first entry below.</div>';
     return;
   }
+  var months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   el.innerHTML = currentHistory.map(function(h, i) {
-    var months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-    var parts  = h.date.split("-");
-    var label  = months[parseInt(parts[1])-1] + " " + parts[0];
+    var parts = h.date.split("-");
+    var label = months[parseInt(parts[1])-1] + " " + parts[0];
+    var modeLabel = h.mode === "balance" ? "📸 Balance" : h.mode === "total" ? "🔄 Set Total" : "➕ Add";
+    var modeColor = h.mode === "balance" ? "#2E5090" : h.mode === "total" ? "#8B6914" : "var(--green)";
     return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">'+
       '<div>'+
-        '<div style="font-size:13px;font-weight:600;color:var(--text)">'+label+'</div>'+
-        (h.addedBy ? '<div style="font-size:11px;color:var(--muted)">by '+h.addedBy+'</div>' : "")+
+        '<div style="font-family:\'IBM Plex Sans\',sans-serif;font-size:13px;font-weight:600;color:var(--text)">'+label+'</div>'+
+        '<div style="display:flex;gap:6px;margin-top:2px">'+
+          '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:9px;font-weight:600;color:'+modeColor+'">'+modeLabel+'</span>'+
+          (h.addedBy ? '<span style="font-family:\'IBM Plex Mono\',monospace;font-size:9px;color:var(--muted)">· '+h.addedBy+'</span>' : "")+
+        '</div>'+
       '</div>'+
       '<div style="display:flex;align-items:center;gap:10px">'+
-        '<div style="font-size:14px;font-weight:700;color:var(--green)">'+inr(h.amount)+'</div>'+
-        '<button onclick="removeHistoryEntry('+i+')" style="background:#E74C3C22;color:var(--red);border:1.5px solid #E74C3C44;border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;font-family:inherit">✕</button>'+
+        '<div style="font-family:\'Playfair Display\',serif;font-size:14px;font-weight:700;color:var(--green)">'+inr(h.amount)+'</div>'+
+        '<button onclick="removeHistoryEntry('+i+')" style="background:#F6E8E8;color:var(--red);border:1px solid #D8A5A5;border-radius:6px;padding:3px 8px;font-size:10px;cursor:pointer;font-family:inherit">✕</button>'+
       '</div>'+
     '</div>';
   }).join("");
@@ -1305,7 +1382,15 @@ function saveInv() {
   if(!name)           { alert("Please enter investment name"); return; }
   if(!cur)            { alert("Please enter current value"); return; }
   if(!currentHistory.length) { alert("Please add at least one investment entry"); return; }
-  var totalInvested = currentHistory.reduce(function(s,h){ return s+h.amount; }, 0);
+  // Calculate total invested correctly based on modes
+  var nonBalance = currentHistory.filter(function(h){ return h.mode !== "balance"; });
+  var balanceEntries = currentHistory.filter(function(h){ return h.mode === "balance"; });
+  var totalInvested;
+  if(balanceEntries.length > 0) {
+    totalInvested = balanceEntries[balanceEntries.length-1].amount;
+  } else {
+    totalInvested = nonBalance.reduce(function(s,h){ return s+h.amount; }, 0);
+  }
   var cat = getSelectedCategory();
   if(!cat) { alert("Please enter a category name"); return; }
   var obj = {
@@ -1404,11 +1489,27 @@ function renderChart(invList) {
   var addedMap={};
   invList.forEach(function(inv){
     var entries = inv.history && inv.history.length ? inv.history :
-                  (inv.date ? [{date:inv.date, amount:inv.investedAmount}] : []);
-    entries.forEach(function(h){
-      var key = chartView==="year" ? h.date.slice(0,4) : h.date.slice(0,7);
-      addedMap[key] = (addedMap[key]||0) + h.amount;
-    });
+                  (inv.date ? [{date:inv.date, amount:inv.investedAmount, mode:"add"}] : []);
+    // Check if this investment uses balance mode
+    var hasBalance = entries.some(function(h){ return h.mode === "balance"; });
+    if(hasBalance) {
+      // Balance mode — use the latest balance entry for each month
+      entries.forEach(function(h){
+        if(h.mode === "balance") {
+          var key = chartView==="year" ? h.date.slice(0,4) : h.date.slice(0,7);
+          balanceMap = balanceMap || {};
+          // Store balance per investment per month — will be resolved below
+          if(!inv._balKey) inv._balKey = inv.id || inv.name;
+          if(!balanceMap[inv._balKey]) balanceMap[inv._balKey] = {};
+          balanceMap[inv._balKey][key] = h.amount;
+        }
+      });
+    } else {
+      entries.forEach(function(h){
+        var key = chartView==="year" ? h.date.slice(0,4) : h.date.slice(0,7);
+        addedMap[key] = (addedMap[key]||0) + h.amount;
+      });
+    }
   });
   if(!Object.keys(addedMap).length){el.innerHTML='<div class="empty"><div class="empty-icon">📈</div><p>Add investments to see chart</p></div>';return;}
   var keys=[];
