@@ -1496,28 +1496,19 @@ function setView(v) {
 function renderChart(invList) {
   invList = invList || investments;
   var el=document.getElementById("chart-area");
-  var addedMap={};
+  var addedMap={};  // month -> cumulative added (add/total mode)
+  var balMap={};    // invId -> {month -> balance} (balance mode)
 
   invList.forEach(function(inv){
     var entries = inv.history && inv.history.length ? inv.history :
                   (inv.date ? [{date:inv.date, amount:inv.investedAmount, mode:"add"}] : []);
-
     var hasBalance = entries.some(function(h){ return h.mode === "balance"; });
-
+    var invId = inv.id || inv.name;
     if(hasBalance) {
-      // Balance mode — each entry is a snapshot, not cumulative
-      // Sort by date and use each balance as the value for that month
-      var sorted = entries.slice().sort(function(a,b){ return a.date>b.date?1:-1; });
-      sorted.forEach(function(h){
+      balMap[invId] = {};
+      entries.forEach(function(h){
         var key = chartView==="year" ? h.date.slice(0,4) : h.date.slice(0,7);
-        // For balance mode, store as absolute value per investment
-        // We track per-investment balance separately
-        if(!addedMap["__bal_"+inv.id+"_"+key]) {
-          addedMap["__bal_"+inv.id+"_"+key] = 0;
-        }
-        addedMap["__bal_"+inv.id+"_"+key] = h.amount;
-        // Also mark this key as existing
-        if(!addedMap[key]) addedMap[key] = 0;
+        balMap[invId][key] = h.amount;
       });
     } else {
       entries.forEach(function(h){
@@ -1527,46 +1518,41 @@ function renderChart(invList) {
     }
   });
 
-  // Now resolve balance entries into the addedMap
-  // For each month key, add the latest balance for each balance-mode investment
-  var balKeys = Object.keys(addedMap).filter(function(k){ return k.startsWith("__bal_"); });
-  if(balKeys.length > 0) {
-    // Get all month keys (non-balance)
-    var monthKeys = Object.keys(addedMap).filter(function(k){ return !k.startsWith("__bal_"); });
-    // Group balance entries by investment
-    var invBalances = {};
-    balKeys.forEach(function(k) {
-      // key format: __bal_{invId}_{monthKey}
-      var parts = k.replace("__bal_","").split("_");
-      var monthKey = parts[parts.length-1];
-      var invId = parts.slice(0,parts.length-1).join("_");
-      if(!invBalances[invId]) invBalances[invId] = {};
-      invBalances[invId][monthKey] = addedMap[k];
-      delete addedMap[k];
-    });
-    // For each month, add the latest known balance for each balance investment
-    monthKeys.forEach(function(mk){
-      Object.keys(invBalances).forEach(function(invId){
-        var bal = invBalances[invId][mk];
-        if(bal !== undefined) {
-          addedMap[mk] = (addedMap[mk]||0) + bal;
-        }
-      });
-    });
-  }
-  if(!Object.keys(addedMap).length){el.innerHTML='<div class="empty"><div class="empty-icon">📈</div><p>Add investments with history entries to see chart</p></div>';return;}
+  // Collect all month keys
+  var allKeysSet = {};
+  Object.keys(addedMap).forEach(function(k){ allKeysSet[k]=1; });
+  Object.values(balMap).forEach(function(months){ Object.keys(months).forEach(function(k){ allKeysSet[k]=1; }); });
+  if(!Object.keys(allKeysSet).length){el.innerHTML='<div class="empty"><div class="empty-icon">📈</div><p>Add investments with history entries to see chart</p></div>';return;}
+
   var keys=[];
   if(chartView==="month"){
-    var first=Object.keys(addedMap).sort()[0];
+    var sortedAll=Object.keys(allKeysSet).sort();
+    var first=sortedAll[0];
     var now=new Date(), parts=first.split("-");
     var y=parseInt(parts[0]),m=parseInt(parts[1]),ey=now.getFullYear(),em=now.getMonth()+1;
     while(y<ey||(y===ey&&m<=em)){keys.push(y+"-"+(m<10?"0":"")+m);m++;if(m>12){m=1;y++;}}
   } else {
-    var fy=parseInt(Object.keys(addedMap).sort()[0]);
+    var sortedAllY=Object.keys(allKeysSet).sort();
+    var fy=parseInt(sortedAllY[0]);
     for(var yr=fy;yr<=new Date().getFullYear();yr++) keys.push(String(yr));
   }
-  var running=0;
-  var cumulative=keys.map(function(k){running+=(addedMap[k]||0);return running;});
+
+  // Build cumulative for add/total investments
+  var addRunning=0;
+  var addCumByKey={};
+  keys.forEach(function(k){ addRunning+=(addedMap[k]||0); addCumByKey[k]=addRunning; });
+
+  // For each key, add latest known balance for each balance-mode investment
+  var cumulative=keys.map(function(k){
+    var balTotal=0;
+    Object.keys(balMap).forEach(function(invId){
+      var months=balMap[invId];
+      var latestBal=0;
+      Object.keys(months).sort().forEach(function(mk){ if(mk<=k) latestBal=months[mk]; });
+      balTotal+=latestBal;
+    });
+    return (addCumByKey[k]||0)+balTotal;
+  });
   var maxVal=cumulative[cumulative.length-1]||1;
   var chartH=150, barW=Math.max(28,Math.min(48,Math.floor((window.innerWidth-60)/keys.length)-8));
   function short(v){return v>=10000000?"₹"+(v/10000000).toFixed(1)+"Cr":v>=100000?"₹"+(v/100000).toFixed(1)+"L":v>=1000?"₹"+(v/1000).toFixed(0)+"K":"₹"+v;}
@@ -1886,7 +1872,7 @@ function renderCredList() {
 }
 
 // ── VERSION CHECK + SERVICE WORKER ─────────────────────────
-var APP_VERSION = "v38-fast";
+var APP_VERSION = "v39-balfix";
 var storedVersion = localStorage.getItem("fv_version");
 if(storedVersion && storedVersion !== APP_VERSION) {
   // New version detected — clear cache and reload
