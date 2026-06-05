@@ -589,16 +589,16 @@ function getFamilySalt(code) {
 var vaultMode = "set"; // "set" or "unlock"
 
 async function checkVaultStatus() {
-  // Check if vault is already set up for this family
   try {
+    // Check family-level vault (not per-user)
     var doc = await db.collection("families").doc(familyCode)
-      .collection("vault").doc(currentUser.uid).get();
+      .collection("vault").doc("family").get();
     if(doc.exists && doc.data().keyCheck) {
-      // Vault exists for this user — ask to unlock
+      // Family vault exists — ask to unlock
       vaultMode = "unlock";
       document.getElementById("vault-icon").textContent = "🔐";
       document.getElementById("vault-title").textContent = "Unlock Your Vault";
-      document.getElementById("vault-sub").textContent = "Enter your vault password to decrypt your data.";
+      document.getElementById("vault-sub").textContent = "Enter the family vault password to access your data.";
       document.getElementById("vault-pass").placeholder = "Enter vault password";
       document.getElementById("vault-pass2").style.display = "none";
       document.getElementById("vault-btn").textContent = "Unlock & Open App";
@@ -606,22 +606,20 @@ async function checkVaultStatus() {
       document.getElementById("vault-warn").style.display = "none";
       showScreen("screen-vault");
     } else {
-      // New member — needs to set vault password
-      // Must use SAME password as family owner so data decrypts correctly
+      // No family vault yet — owner sets it
       vaultMode = "set";
       document.getElementById("vault-icon").textContent = "🛡️";
       document.getElementById("vault-title").textContent = "Set Vault Password";
-      document.getElementById("vault-sub").textContent = "Enter the same vault password your family uses. This lets you decrypt shared family data.";
-      document.getElementById("vault-pass").placeholder = "Enter family vault password";
-      document.getElementById("vault-pass2").style.display = "none"; // no confirm needed — family already set it
-      document.getElementById("vault-btn").textContent = "Set & Open App";
+      document.getElementById("vault-sub").textContent = "This encrypts all family data. Share this password with family members.";
+      document.getElementById("vault-pass").placeholder = "Create vault password";
+      document.getElementById("vault-pass2").style.display = "block";
+      document.getElementById("vault-btn").textContent = "Set Password & Encrypt Data";
       document.getElementById("vault-skip").style.display = "block";
       document.getElementById("vault-warn").style.display = "block";
-      document.getElementById("vault-warn").textContent = "⚠️ Use the same vault password your family owner set. Ask them on WhatsApp if you don't know it.";
+      document.getElementById("vault-warn").textContent = "⚠️ Remember this password and share it with family members. Cannot be recovered if forgotten.";
       showScreen("screen-vault");
     }
   } catch(e) {
-    // Can't check vault — go to app unencrypted
     proceedToAppUnencrypted();
   }
 }
@@ -635,9 +633,7 @@ async function submitVaultPass() {
   if(!pass || pass.length < 6) {
     err.textContent = "Vault password must be at least 6 characters"; return;
   }
-  // Only require confirm if pass2 is visible (original owner setting password)
-  var pass2El = document.getElementById("vault-pass2");
-  if(vaultMode === "set" && pass2El.style.display !== "none" && pass !== pass2) {
+  if(vaultMode === "set" && pass !== pass2) {
     err.textContent = "Passwords do not match"; return;
   }
 
@@ -650,39 +646,26 @@ async function submitVaultPass() {
     var key  = await deriveKey(pass, salt);
 
     if(vaultMode === "set") {
-      // Store a key verification token so we can detect wrong passwords later
-      var checkToken = await encryptData({check:"FamilyVault-OK", uid:currentUser.uid}, key);
+      // Store family-level keyCheck
+      var checkToken = await encryptData({check:"FamilyVault-OK"}, key);
       await db.collection("families").doc(familyCode)
-        .collection("vault").doc(currentUser.uid)
+        .collection("vault").doc("family")
         .set({keyCheck: checkToken, createdAt: Date.now()});
       vaultKey = key;
-      // Hide vault banner
       var banner = document.getElementById("vault-banner");
       if(banner) banner.style.display = "none";
-      // Migrate existing unencrypted data
       await migrateExistingData();
       proceedToAppUnencrypted();
     } else {
-      // Verify password by decrypting the check token
+      // Verify against family-level keyCheck
       var doc = await db.collection("families").doc(familyCode)
-        .collection("vault").doc(currentUser.uid).get();
-      if(!doc.exists || !doc.data().keyCheck) {
-        // No vault doc for this user — treat as first time setup
-        // Store their vault key using the password they entered
-        var checkToken2 = await encryptData({check:"FamilyVault-OK", uid:currentUser.uid}, key);
-        await db.collection("families").doc(familyCode)
-          .collection("vault").doc(currentUser.uid)
-          .set({keyCheck: checkToken2, createdAt: Date.now()});
-        vaultKey = key;
-        var banner2 = document.getElementById("vault-banner");
-        if(banner2) banner2.style.display = "none";
-        proceedToAppUnencrypted();
-        return;
-      }
+        .collection("vault").doc("family").get();
       try {
         var check = await decryptData(doc.data().keyCheck, key);
         if(check.check !== "FamilyVault-OK") throw new Error("Wrong password");
         vaultKey = key;
+        var banner3 = document.getElementById("vault-banner");
+        if(banner3) banner3.style.display = "none";
         proceedToAppUnencrypted();
       } catch(e) {
         err.textContent = "Wrong vault password. Try again.";
@@ -1887,7 +1870,7 @@ function renderCredList() {
 }
 
 // ── VERSION CHECK + SERVICE WORKER ─────────────────────────
-var APP_VERSION = "v41-vaultfix";
+var APP_VERSION = "v42-familyvault";
 var storedVersion = localStorage.getItem("fv_version");
 if(storedVersion && storedVersion !== APP_VERSION) {
   // New version detected — clear cache and reload
