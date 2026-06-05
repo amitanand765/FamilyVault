@@ -620,7 +620,22 @@ async function checkVaultStatus() {
       showScreen("screen-vault");
     }
   } catch(e) {
-    proceedToAppUnencrypted();
+    console.log("Vault check error:", e.message);
+    // On any error — show set screen so user can try
+    vaultMode = "set";
+    document.getElementById("vault-icon").textContent = "🛡️";
+    document.getElementById("vault-title").textContent = "Set Vault Password";
+    document.getElementById("vault-sub").textContent = "This encrypts all family data. Share this password with family members.";
+    document.getElementById("vault-pass").placeholder = "Create vault password";
+    document.getElementById("vault-pass2").style.display = "block";
+    document.getElementById("vault-btn").textContent = "Set Password & Open App";
+    document.getElementById("vault-btn").disabled = false;
+    document.getElementById("vault-skip").style.display = "block";
+    document.getElementById("vault-warn").style.display = "none";
+    document.getElementById("vault-err").textContent = "";
+    document.getElementById("vault-pass").value = "";
+    document.getElementById("vault-pass2").value = "";
+    showScreen("screen-vault");
   }
 }
 
@@ -646,11 +661,15 @@ async function submitVaultPass() {
     var key  = await deriveKey(pass, salt);
 
     if(vaultMode === "set") {
-      // Store family-level keyCheck
-      var checkToken = await encryptData({check:"FamilyVault-OK"}, key);
-      await db.collection("families").doc(familyCode)
-        .collection("vault").doc("family")
-        .set({keyCheck: checkToken, createdAt: Date.now()});
+      try {
+        var checkToken = await encryptData({check:"FamilyVault-OK"}, key);
+        await db.collection("families").doc(familyCode)
+          .collection("vault").doc("family")
+          .set({keyCheck: checkToken, createdAt: Date.now()});
+      } catch(e) {
+        // Failed to save — still proceed with key in memory
+        console.log("Vault save failed:", e.message);
+      }
       vaultKey = key;
       var banner = document.getElementById("vault-banner");
       if(banner) banner.style.display = "none";
@@ -1870,7 +1889,7 @@ function renderCredList() {
 }
 
 // ── VERSION CHECK + SERVICE WORKER ─────────────────────────
-var APP_VERSION = "v42-familyvault";
+var APP_VERSION = "v43-stable";
 var storedVersion = localStorage.getItem("fv_version");
 if(storedVersion && storedVersion !== APP_VERSION) {
   // New version detected — clear cache and reload
