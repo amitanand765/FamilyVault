@@ -700,7 +700,9 @@ async function submitVaultPass() {
 }
 
 function skipVaultPass() {
-  vaultKey = null; // no encryption
+  vaultKey = null;
+  var banner = document.getElementById("vault-banner");
+  if(banner) banner.style.display = "none";
   proceedToAppUnencrypted();
 }
 
@@ -1161,11 +1163,21 @@ function startListeners() {
           if(vaultKey) {
             return decryptData(data.data, vaultKey)
               .then(function(dec){ return dec; })
-              .catch(function(){ return null; }); // decryption failed
+              .catch(function(){ return null; });
           }
-          return Promise.resolve(null); // no key — skip
+          // No vault key — return raw data with placeholder
+          return Promise.resolve({
+            id: data.id,
+            name: "🔒 Encrypted",
+            category: "Unknown",
+            currentValue: 0,
+            investedAmount: 0,
+            withdrawable: "no",
+            history: [],
+            addedByUid: data.addedByUid||""
+          });
         }
-        return Promise.resolve(data); // unencrypted
+        return Promise.resolve(data);
       });
       Promise.all(promises).then(function(results){
         investments = results.filter(function(d){ return d && d.name; });
@@ -1889,7 +1901,7 @@ function renderCredList() {
 }
 
 // ── VERSION CHECK + SERVICE WORKER ─────────────────────────
-var APP_VERSION = "v43-stable";
+var APP_VERSION = "v44-showdata";
 var storedVersion = localStorage.getItem("fv_version");
 if(storedVersion && storedVersion !== APP_VERSION) {
   // New version detected — clear cache and reload
