@@ -594,7 +594,7 @@ async function checkVaultStatus() {
     var doc = await db.collection("families").doc(familyCode)
       .collection("vault").doc(currentUser.uid).get();
     if(doc.exists && doc.data().keyCheck) {
-      // Vault exists — ask user to unlock
+      // Vault exists for this user — ask to unlock
       vaultMode = "unlock";
       document.getElementById("vault-icon").textContent = "🔐";
       document.getElementById("vault-title").textContent = "Unlock Your Vault";
@@ -606,18 +606,18 @@ async function checkVaultStatus() {
       document.getElementById("vault-warn").style.display = "none";
       showScreen("screen-vault");
     } else {
-      // New vault — set it up
+      // New member — needs to set vault password
+      // Must use SAME password as family owner so data decrypts correctly
       vaultMode = "set";
       document.getElementById("vault-icon").textContent = "🛡️";
       document.getElementById("vault-title").textContent = "Set Vault Password";
-      document.getElementById("vault-sub").textContent = "This encrypts all your data. Share this password with family members.";
-      document.getElementById("vault-pass").placeholder = "Create vault password";
-      document.getElementById("vault-pass2").style.display = "block";
-      document.getElementById("vault-btn").textContent = "Set Password & Encrypt Data";
+      document.getElementById("vault-sub").textContent = "Enter the same vault password your family uses. This lets you decrypt shared family data.";
+      document.getElementById("vault-pass").placeholder = "Enter family vault password";
+      document.getElementById("vault-pass2").style.display = "none"; // no confirm needed — family already set it
+      document.getElementById("vault-btn").textContent = "Set & Open App";
       document.getElementById("vault-skip").style.display = "block";
       document.getElementById("vault-warn").style.display = "block";
-      document.getElementById("vault-warn").textContent =
-        "⚠️ Remember this password! If you forget it, your data cannot be recovered. Share it with family members via WhatsApp.";
+      document.getElementById("vault-warn").textContent = "⚠️ Use the same vault password your family owner set. Ask them on WhatsApp if you don't know it.";
       showScreen("screen-vault");
     }
   } catch(e) {
@@ -635,7 +635,9 @@ async function submitVaultPass() {
   if(!pass || pass.length < 6) {
     err.textContent = "Vault password must be at least 6 characters"; return;
   }
-  if(vaultMode === "set" && pass !== pass2) {
+  // Only require confirm if pass2 is visible (original owner setting password)
+  var pass2El = document.getElementById("vault-pass2");
+  if(vaultMode === "set" && pass2El.style.display !== "none" && pass !== pass2) {
     err.textContent = "Passwords do not match"; return;
   }
 
@@ -1872,7 +1874,7 @@ function renderCredList() {
 }
 
 // ── VERSION CHECK + SERVICE WORKER ─────────────────────────
-var APP_VERSION = "v39-balfix";
+var APP_VERSION = "v40-wifefix";
 var storedVersion = localStorage.getItem("fv_version");
 if(storedVersion && storedVersion !== APP_VERSION) {
   // New version detected — clear cache and reload
