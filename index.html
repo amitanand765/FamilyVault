@@ -666,6 +666,19 @@ async function submitVaultPass() {
       // Verify password by decrypting the check token
       var doc = await db.collection("families").doc(familyCode)
         .collection("vault").doc(currentUser.uid).get();
+      if(!doc.exists || !doc.data().keyCheck) {
+        // No vault doc for this user — treat as first time setup
+        // Store their vault key using the password they entered
+        var checkToken2 = await encryptData({check:"FamilyVault-OK", uid:currentUser.uid}, key);
+        await db.collection("families").doc(familyCode)
+          .collection("vault").doc(currentUser.uid)
+          .set({keyCheck: checkToken2, createdAt: Date.now()});
+        vaultKey = key;
+        var banner2 = document.getElementById("vault-banner");
+        if(banner2) banner2.style.display = "none";
+        proceedToAppUnencrypted();
+        return;
+      }
       try {
         var check = await decryptData(doc.data().keyCheck, key);
         if(check.check !== "FamilyVault-OK") throw new Error("Wrong password");
@@ -1874,7 +1887,7 @@ function renderCredList() {
 }
 
 // ── VERSION CHECK + SERVICE WORKER ─────────────────────────
-var APP_VERSION = "v40-wifefix";
+var APP_VERSION = "v41-vaultfix";
 var storedVersion = localStorage.getItem("fv_version");
 if(storedVersion && storedVersion !== APP_VERSION) {
   // New version detected — clear cache and reload
